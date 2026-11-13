@@ -12,8 +12,9 @@ if sys.platform == "win32":
 
 from faster_whisper import WhisperModel
 
-MODEL_DIR = r"C:\personal\SignBridge-AI\data"
-DEFAULT_AUDIO = r"C:\personal\SignBridge-AI\data\test_vi.m4a"
+MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+MODEL_NAME = os.getenv("WHISPER_MODEL", "diepho/PhoWhisper-small-ct2")
+DEFAULT_AUDIO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_audio-text", "test.mp3")
 
 def test_transcription(audio_path, language="vi"):
     if not os.path.exists(audio_path):
@@ -21,9 +22,9 @@ def test_transcription(audio_path, language="vi"):
         print("[*] Hãy copy một file ghi âm (.m4a, .mp3, .wav) vào đường dẫn trên rồi thử lại.")
         return
 
-    print(f"[*] Đang nạp model Whisper 'base' từ: {MODEL_DIR}...")
+    print(f"[*] Đang nạp model '{MODEL_NAME}' từ: {MODEL_DIR}...")
     t0 = time.time()
-    model = WhisperModel("base", device="cpu", compute_type="int8", download_root=MODEL_DIR)
+    model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8", download_root=MODEL_DIR)
     t_load = time.time() - t0
     print(f"[+] Model đã sẵn sàng ({t_load:.2f}s)\n")
 

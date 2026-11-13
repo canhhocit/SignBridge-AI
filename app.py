@@ -17,6 +17,7 @@ if sys.platform == "win32":
         pass
 
 MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+MODEL_NAME = os.getenv("WHISPER_MODEL", "diepho/PhoWhisper-small-ct2")
 
 app = FastAPI(
     title="SignBridge AI Service",
@@ -33,10 +34,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Khởi tạo model Whisper 1 lần duy nhất lúc khởi động
-print(f"[*] Khởi tạo WhisperModel ('base', CPU, int8) từ: {MODEL_DIR}...")
-whisper_model = WhisperModel("base", device="cpu", compute_type="int8", download_root=MODEL_DIR)
-print("[+] Model Whisper đã sẵn sàng phục vụ!")
+print(f"[*] Khởi tạo WhisperModel ('{MODEL_NAME}', CPU, int8) từ: {MODEL_DIR}...")
+whisper_model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8", download_root=MODEL_DIR)
+print("[+] Model PhoWhisper đã sẵn sàng phục vụ!")
 
 @app.post("/api/v1/speech/transcribe")
 async def transcribe_audio(
@@ -159,7 +159,7 @@ def index_page():
     <header>
         <h1>🌉 SignBridge AI Studio</h1>
         <div class="subtitle">Trang kiểm thử Speech-to-Text (V1) & Thử nghiệm mô hình trên máy local</div>
-        <div class="badge">Model: faster-whisper base | Runtime: CPU int8</div>
+        <div class="badge">Model: PhoWhisper small (ct2) | Runtime: CPU int8</div>
     </header>
 
     <div class="card">
