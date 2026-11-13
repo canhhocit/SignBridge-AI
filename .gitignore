@@ -1,0 +1,28 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large AI Model checkpoints and HuggingFace cache (>100MB rejected by GitHub)
+data/models--*
+data/.locks/
+data/*.whl
+data/CACHEDIR.TAG
+*.bin
+
+# Cloned external repositories (cloned separately)
+faster-whisper/
+whisper.cpp/
+Vietnamese-Sign-Language-Recognition/
+
+# IDE and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
