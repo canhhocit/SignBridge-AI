@@ -3,6 +3,11 @@ venv/
 .venv/
 env/
 
+# Environment Variables & Secrets
+.env
+*.env
+!.env.example
+
 # Python cache
 __pycache__/
 *.py[cod]
