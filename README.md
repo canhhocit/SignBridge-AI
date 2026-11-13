@@ -108,6 +108,7 @@ Sau khi server chạy:
 
 ---
 
+
 ## 6. Cấu hình Mô hình
 
 Mặc định server sử dụng mô hình tối ưu tiếng Việt **PhoWhisper**:
