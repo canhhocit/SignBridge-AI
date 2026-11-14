@@ -259,6 +259,30 @@ def test_chips_crud_is_isolated_per_user(client):
     assert client.delete(f"/api/chips/{chip_id}", params={"user_id": "u1"}).json()["success"] is True
 
 
+def test_chips_update_endpoint(client):
+    created = client.post("/api/v1/chips", json={"text": "Ít ngọt", "context": "CAFE"}, headers={"X-User-Id": "u1"}).json()
+    chip_id = created["id"]
+
+    # u2 không được sửa thẻ của u1
+    assert_error(
+        client.put(f"/api/v1/chips/{chip_id}", json={"text": "Nhiều ngọt"}, headers={"X-User-Id": "u2"}),
+        404, "NOT_FOUND"
+    )
+
+    # u1 sửa thành công
+    res = client.put(f"/api/v1/chips/{chip_id}", json={"text": "70% ngọt"}, headers={"X-User-Id": "u1"})
+    assert res.status_code == 200
+    assert res.json()["text"] == "70% ngọt"
+
+    # kiểm tra danh sách đã đổi
+    mine = [c["text"] for c in client.get("/api/v1/chips", params={"context": "CAFE"}, headers={"X-User-Id": "u1"}).json()]
+    assert "70% ngọt" in mine
+    assert "Ít ngọt" not in mine
+
+    # body rỗng -> 400
+    assert_error(client.put(f"/api/v1/chips/{chip_id}", json={}, headers={"X-User-Id": "u1"}), 400, "INVALID_REQUEST")
+
+
 def test_chips_v1_with_user_header_and_reset(client):
     h = {"X-User-Id": "hdr-user"}
     assert client.post("/api/v1/chips", json={"text": "Không đường", "context": "CAFE"}, headers=h).status_code == 200

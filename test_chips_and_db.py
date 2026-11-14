@@ -57,6 +57,15 @@ def test_signbridge_postgres_and_chips():
     assert "Trà sữa trần châu hoàng kim" in chips_a_texts
     print(f"[5] User A verified seeing own custom chip.")
 
+    # 5b. User A updates the custom chip (PUT /api/v1/chips/{id})
+    res_update = client.put(f"/api/v1/chips/{chip_id}", json={"text": "Trà sữa trân châu hoàng kim 50% đường"}, headers={"X-User-Id": user_a})
+    assert res_update.status_code == 200
+    assert res_update.json()["text"] == "Trà sữa trân châu hoàng kim 50% đường"
+    # User B không được phép sửa thẻ của User A
+    res_update_b = client.put(f"/api/v1/chips/{chip_id}", json={"text": "Hack thẻ"}, headers={"X-User-Id": user_b})
+    assert res_update_b.status_code == 404
+    print(f"[5b] User A updated chip successfully, User B modification blocked (404).")
+
     # 6. Test AI Suggest Chips endpoint
     suggest_req = {
         "context": "CAFE",

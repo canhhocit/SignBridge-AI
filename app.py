@@ -201,6 +201,11 @@ class CreateChipRequest(BaseModel):
     context: ContextType = "CUSTOM"
     user_id: Optional[UserId] = None
 
+class UpdateChipRequest(BaseModel):
+    text: Optional[ChipText] = None
+    context: Optional[ContextType] = None
+    user_id: Optional[UserId] = None
+
 class SuggestChipsRequest(BaseModel):
     context: ContextType = "CUSTOM"
     recentText: Optional[ShortText] = None
@@ -475,6 +480,32 @@ def create_chip(req: CreateChipRequest, x_user_id: Optional[str] = Header(None, 
     except ValueError as e:
         raise ApiError.invalid_request(str(e))
 
+@app.put("/api/v1/chips/{chip_id}")
+@app.put("/api/chips/{chip_id}")
+@app.patch("/api/v1/chips/{chip_id}")
+@app.patch("/api/chips/{chip_id}")
+def update_chip(
+    chip_id: str,
+    req: UpdateChipRequest,
+    user_id: Optional[str] = None,
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    """
+    Sửa nội dung hoặc ngữ cảnh của thẻ cá nhân (chỉ sửa thẻ của mình, không sửa thẻ hệ thống)
+    """
+    uid = get_current_user_id(x_user_id, req.user_id or user_id)
+    if not DB_AVAILABLE:
+        raise ApiError.database_unavailable()
+    if req.text is None and req.context is None:
+        raise ApiError.invalid_request("Cần cung cấp ít nhất text hoặc context để cập nhật.")
+    try:
+        updated = database.update_user_chip(uid, chip_id, req.text, req.context)
+        if not updated:
+            raise ApiError(404, "NOT_FOUND", "Không tìm thấy thẻ cá nhân hoặc không có quyền sửa.")
+        return updated
+    except ValueError as e:
+        raise ApiError.invalid_request(str(e))
+
 @app.delete("/api/v1/chips/{chip_id}")
 @app.delete("/api/chips/{chip_id}")
 def remove_chip(
@@ -628,7 +659,9 @@ def index_page():
         .chip-tag.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
         .chip-tag.custom { border-style: dashed; border-color: #3b82f6; background: #eff6ff; }
         .chip-tag.custom.selected { background: var(--primary); color: #fff; border-style: solid; }
-        .chip-tag .btn-del { font-size: 16px; margin-left: 4px; cursor: pointer; opacity: 0.6; line-height: 1; border: none; background: none; color: inherit; padding: 0 2px; }
+        .chip-tag .btn-edit { font-size: 13px; margin-left: 4px; cursor: pointer; opacity: 0.6; line-height: 1; border: none; background: none; color: inherit; padding: 0 2px; }
+        .chip-tag .btn-edit:hover { opacity: 1; color: var(--primary); }
+        .chip-tag .btn-del { font-size: 16px; margin-left: 2px; cursor: pointer; opacity: 0.6; line-height: 1; border: none; background: none; color: inherit; padding: 0 2px; }
         .chip-tag .btn-del:hover { opacity: 1; color: var(--danger); font-weight: bold; }
 
         .ai-chip-pill { padding: 6px 12px; border-radius: 999px; background: #dcfce7; color: #166534; border: 1px solid #86efac; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
@@ -1034,11 +1067,12 @@ async function loadUserChips() {
 
             let html = `<span>${chip.text}</span>`;
             if (!chip.is_system) {
+                html += `<button class="btn-edit" onclick="editCustomChip(event, '${chip.id}', '${chip.text}')" title="Sửa thẻ riêng này">✏️</button>`;
                 html += `<button class="btn-del" onclick="deleteCustomChip(event, '${chip.id}')" title="Xóa thẻ riêng này">&times;</button>`;
             }
             span.innerHTML = html;
             span.onclick = (e) => {
-                if (e.target.classList.contains('btn-del')) return;
+                if (e.target.classList.contains('btn-del') || e.target.classList.contains('btn-edit')) return;
                 toggleChip(span);
             };
             container.appendChild(span);
@@ -1084,6 +1118,34 @@ async function addNewChip() {
         } else {
             const err = await res.json();
             alert("Lỗi: " + ((err.error && err.error.message) || "Không thể thêm thẻ"));
+        }
+    } catch (e) {
+        alert("Lỗi kết nối: " + e.message);
+    }
+}
+
+async function editCustomChip(event, chipId, oldText) {
+    event.stopPropagation();
+    const newText = prompt("Chỉnh sửa nội dung thẻ:", oldText);
+    if (!newText || newText.trim() === oldText.trim()) return;
+
+    try {
+        const res = await fetch(`/api/v1/chips/${chipId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': currentUserId
+            },
+            body: JSON.stringify({
+                text: newText.trim()
+            })
+        });
+        if (res.ok) {
+            await loadUserChips();
+            updateSelectedChipsFromUI();
+        } else {
+            const err = await res.json();
+            alert("Lỗi: " + ((err.error && err.error.message) || "Không thể sửa thẻ"));
         }
     } catch (e) {
         alert("Lỗi kết nối: " + e.message);

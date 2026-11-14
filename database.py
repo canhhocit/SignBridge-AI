@@ -215,6 +215,43 @@ def add_user_chip(user_id: str, text: str, context: str = "CUSTOM") -> Dict[str,
     finally:
         db.close()
 
+def update_user_chip(user_id: str, chip_id: str, text: Optional[str] = None, context: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Cập nhật nội dung hoặc ngữ cảnh của thẻ cá nhân.
+    CHỈ CHO PHÉP SỬA thẻ của chính user_id đó. Tuyệt đối KHÔNG sửa thẻ hệ thống (is_system=True).
+    """
+    db = SessionLocal()
+    try:
+        chip = db.query(QuickChip).filter(
+            QuickChip.id == chip_id,
+            QuickChip.user_id == user_id,
+            QuickChip.is_system == False
+        ).first()
+        if not chip:
+            return None
+
+        if text is not None:
+            clean_text = text.strip()
+            if not clean_text:
+                raise ValueError("Nội dung thẻ không được để trống")
+            chip.text = clean_text
+
+        if context is not None:
+            chip.context = context
+
+        db.commit()
+        db.refresh(chip)
+        return {
+            "id": chip.id,
+            "text": chip.text,
+            "context": chip.context,
+            "is_system": chip.is_system,
+            "user_id": chip.user_id,
+            "usage_count": chip.usage_count
+        }
+    finally:
+        db.close()
+
 def delete_user_chip(user_id: str, chip_id: str) -> bool:
     """
     Xóa thẻ cá nhân.
