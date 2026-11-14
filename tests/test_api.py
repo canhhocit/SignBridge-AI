@@ -37,7 +37,7 @@ def test_health(client):
 def test_index_page_returns_html(client):
     res = client.get("/")
     assert res.status_code == 200
-    assert "SignBridge AI Studio" in res.text
+    assert "SignBridge" in res.text
     assert "text/html" in res.headers.get("content-type", "")
 
 

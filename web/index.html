@@ -3,495 +3,385 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SignBridge AI Studio — Nền tảng Giao tiếp Trợ lý Khiếm thính</title>
+    <title>SignBridge — Trợ lý Giao tiếp Khiếm thính</title>
     <style>
         :root {
             --primary: #2563eb;
             --primary-hover: #1d4ed8;
             --primary-light: #eff6ff;
-            --secondary: #475569;
+            --secondary: #64748b;
             --success: #16a34a;
-            --success-light: #dcfce7;
             --danger: #dc2626;
-            --danger-light: #fee2e2;
             --warning: #f59e0b;
-            --warning-light: #fef3c7;
-            --bg: #f8fafc;
+            --bg: #f1f5f9;
             --card: #ffffff;
             --border: #e2e8f0;
-            --border-hover: #cbd5e1;
             --text: #0f172a;
-            --text-secondary: #475569;
             --muted: #64748b;
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
             --radius-sm: 8px;
-            --radius: 12px;
-            --radius-lg: 16px;
+            --radius: 14px;
+            --radius-lg: 20px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow: 0 4px 6px -1px rgba(0,0,0,0.08);
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        body { background: var(--bg); color: var(--text); padding: 16px 12px 60px; display: flex; justify-content: center; min-height: 100vh; }
-        
-        .app-wrapper { width: 100%; max-width: 960px; transition: all 0.3s ease; }
-        
-        /* Mobile Simulator Mode */
-        .app-wrapper.mobile-sim-mode {
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 12px 6px 40px; }
+
+        /* ================= App Mode (Default) vs Desktop Mode ================= */
+        .app-wrapper {
+            width: 100%;
+            transition: all 0.25s ease-in-out;
+        }
+
+        /* Default: Sleek Phone Mockup on desktop */
+        .app-wrapper.app-mode {
             max-width: 412px;
             background: #ffffff;
-            border: 10px solid #1e293b;
+            border: 8px solid #0f172a;
             border-radius: 40px;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
-            padding: 16px;
-            margin: 20px auto;
+            box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.35);
+            padding: 16px 14px 24px;
+            margin: 8px auto;
             position: relative;
         }
-        .app-wrapper.mobile-sim-mode::before {
+        .app-wrapper.app-mode::before {
             content: "";
             position: absolute;
-            top: 6px;
+            top: 5px;
             left: 50%;
             transform: translateX(-50%);
-            width: 120px;
-            height: 18px;
-            background: #1e293b;
-            border-radius: 10px;
+            width: 110px;
+            height: 16px;
+            background: #0f172a;
+            border-radius: 12px;
             z-index: 99;
         }
 
-        /* Top Header */
-        header { text-align: center; margin-bottom: 16px; }
-        .brand-title { font-size: 24px; font-weight: 800; color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 8px; letter-spacing: -0.5px; }
-        .brand-subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
-        
-        /* Health Status Bar */
-        .health-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin: 10px 0;
-            background: #ffffff;
-            border: 1px solid var(--border);
-            padding: 6px 12px;
-            border-radius: 999px;
-            box-shadow: var(--shadow-sm);
+        /* Desktop Mode: Wide layout */
+        .app-wrapper.desktop-mode {
+            max-width: 900px;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            padding: 12px 16px;
+            margin: 0 auto;
         }
-        .health-item { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--text-secondary); padding: 2px 6px; }
-        .health-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
-        .health-dot.online { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.6); }
-        .health-dot.offline { background: #ef4444; }
+        .app-wrapper.desktop-mode::before { display: none; }
 
-        /* User & Utility Toolbar */
-        .top-toolbar {
+        @media (max-width: 480px) {
+            body { padding: 4px 2px; }
+            .app-wrapper.app-mode {
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 10px 8px;
+                margin: 0;
+                max-width: 100%;
+            }
+            .app-wrapper.app-mode::before { display: none; }
+        }
+
+        /* ================= Header Bar ================= */
+        .app-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 12px;
-            gap: 8px;
-            flex-wrap: wrap;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }
-        .user-pill {
-            display: inline-flex;
+        .app-logo {
+            font-size: 19px;
+            font-weight: 800;
+            color: var(--primary);
+            display: flex;
             align-items: center;
             gap: 6px;
-            font-size: 12px;
-            background: #ffffff;
-            padding: 5px 12px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow-sm);
+            letter-spacing: -0.5px;
         }
-        .btn-ghost-sm {
-            border: none;
-            background: none;
-            color: var(--primary);
-            font-weight: 700;
-            cursor: pointer;
-            font-size: 12px;
-            padding: 2px 4px;
-            border-radius: 4px;
-        }
-        .btn-ghost-sm:hover { background: var(--primary-light); }
-        
-        .mode-toggle-btn {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            padding: 5px 12px;
-            border-radius: 999px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            transition: all 0.2s;
-            box-shadow: var(--shadow-sm);
-        }
-        .mode-toggle-btn:hover { border-color: var(--primary); color: var(--primary); }
-        .mode-toggle-btn.active { background: var(--primary); color: #ffffff; border-color: var(--primary); }
+        .header-actions { display: flex; align-items: center; gap: 6px; }
 
-        /* 1-Click Quick Preset Scenarios */
-        .preset-card {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 12px 14px;
-            margin-bottom: 16px;
-            box-shadow: var(--shadow-sm);
-        }
-        .preset-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-        .preset-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; }
-        .preset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
-        .preset-btn {
+        .btn-view-toggle {
+            padding: 4px 10px;
             background: #f8fafc;
             border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 8px 10px;
-            text-align: left;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--muted);
             cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
+            transition: all 0.15s;
         }
-        .preset-btn:hover {
-            border-color: var(--primary);
-            background: #eff6ff;
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-sm);
-        }
-        .preset-badge { font-size: 11px; font-weight: 700; color: var(--primary); }
-        .preset-text { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-view-toggle:hover { border-color: var(--primary); color: var(--primary); }
 
-        /* Main Navigation Tabs */
-        .tabs-nav {
-            display: flex;
-            gap: 6px;
-            margin-bottom: 16px;
-            background: #ffffff;
-            padding: 4px;
-            border-radius: var(--radius);
+        .user-chip {
+            font-size: 11px;
+            color: var(--muted);
+            background: #f8fafc;
             border: 1px solid var(--border);
-            box-shadow: var(--shadow-sm);
+            padding: 3px 8px;
+            border-radius: 999px;
+            cursor: pointer;
+        }
+        .user-chip:hover { border-color: var(--primary); color: var(--primary); }
+
+        /* System Health Dots (Compact) */
+        .health-strip {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .h-dot-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #475569;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            padding: 2px 7px;
+            border-radius: 999px;
+        }
+        .dot { width: 6px; height: 6px; border-radius: 50%; background: #94a3b8; }
+        .dot.ok { background: #10b981; }
+        .dot.err { background: #ef4444; }
+
+        /* ================= Quick Presets Scroll Bar ================= */
+        .preset-scroll-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
             overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
             -webkit-overflow-scrolling: touch;
         }
-        .tabs-nav::-webkit-scrollbar { display: none; }
-        .tab-btn {
+        .preset-scroll-container::-webkit-scrollbar { display: none; }
+        .preset-chip {
+            flex-shrink: 0;
+            padding: 5px 10px;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+        .preset-chip:hover { border-color: var(--primary); background: var(--primary-light); color: var(--primary); }
+
+        /* ================= Tabs Navigation ================= */
+        .tab-bar {
+            display: flex;
+            background: #f1f5f9;
+            padding: 3px;
+            border-radius: var(--radius);
+            margin-bottom: 12px;
+            gap: 2px;
+        }
+        .tab-item {
             flex: 1;
-            min-width: 130px;
-            padding: 9px 12px;
+            padding: 8px 6px;
             border: none;
             background: transparent;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             color: var(--muted);
-            border-radius: var(--radius-sm);
+            border-radius: 10px;
+            transition: all 0.15s;
+            text-align: center;
             white-space: nowrap;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
         }
-        .tab-btn:hover { color: var(--text); background: #f1f5f9; }
-        .tab-btn.active { color: var(--primary); background: var(--primary-light); }
+        .tab-item.active { background: #ffffff; color: var(--primary); box-shadow: var(--shadow-sm); }
 
-        /* Card container */
-        .card {
+        /* ================= Card Container ================= */
+        .app-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 18px;
-            box-shadow: var(--shadow);
-            margin-bottom: 16px;
+            border-radius: var(--radius);
+            padding: 14px;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 12px;
         }
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-        .card-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 6px; color: var(--text); }
-        .card-subtitle { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
 
-        /* Responsive Form Row */
-        .form-row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-        .form-col { flex: 1; min-width: 220px; }
-        label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
-        select, input[type="text"], textarea {
+        .row-compact { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .row-compact select, .row-compact input {
             width: 100%;
-            padding: 9px 12px;
+            padding: 7px 10px;
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
-            font-size: 13px;
+            font-size: 12px;
             background: #ffffff;
-            color: var(--text);
-            transition: border 0.2s;
-        }
-        select:focus, input[type="text"]:focus, textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
 
         /* Buttons */
-        .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+        .btn-action {
             width: 100%;
-            padding: 11px 16px;
+            padding: 10px 14px;
             background: var(--primary);
             color: #ffffff;
             border: none;
             border-radius: var(--radius-sm);
+            font-size: 13px;
             font-weight: 700;
-            font-size: 14px;
             cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: var(--shadow-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.15s;
         }
-        .btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
-        .btn-primary:active { transform: translateY(0); }
-        .btn-primary:disabled { background: #94a3b8; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-action:hover { background: var(--primary-hover); }
+        .btn-action:disabled { background: #94a3b8; cursor: not-allowed; }
+        .btn-green { background: var(--success); }
+        .btn-green:hover { background: #15803d; }
+        .btn-gray { background: var(--secondary); }
+        .btn-gray:hover { background: #475569; }
 
-        .btn-success { background: var(--success); }
-        .btn-success:hover { background: #15803d; }
-        .btn-secondary { background: #64748b; }
-        .btn-secondary:hover { background: #475569; }
-
-        /* Audio Input Modes */
-        .audio-submodes { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-        .submode-btn {
-            padding: 6px 14px;
-            border-radius: 999px;
-            background: #f1f5f9;
+        /* ================= Tab 1: Chiều Về ================= */
+        .submode-switch {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 10px;
+            background: #f8fafc;
+            padding: 3px;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border);
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
         }
-        .submode-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .submode-item {
+            flex: 1;
+            padding: 5px;
+            border: none;
+            background: transparent;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--muted);
+            cursor: pointer;
+            border-radius: 6px;
+        }
+        .submode-item.active { background: #ffffff; color: var(--primary); box-shadow: var(--shadow-sm); }
 
-        .mic-box { text-align: center; padding: 18px 0; }
-        .mic-btn {
-            width: 76px;
-            height: 76px;
+        .mic-area { text-align: center; padding: 10px 0; }
+        .mic-circle {
+            width: 68px;
+            height: 68px;
             border-radius: 50%;
             border: none;
             background: #fee2e2;
             color: var(--danger);
-            font-size: 32px;
+            font-size: 28px;
             cursor: pointer;
-            transition: all 0.2s;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
-        }
-        .mic-btn.recording {
-            background: var(--danger);
-            color: #fff;
-            animation: pulse-ring 1.2s infinite;
-        }
-        @keyframes pulse-ring {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 16px rgba(220, 38, 38, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
-        }
-        .audio-visualizer-canvas { width: 100%; height: 48px; margin-top: 8px; border-radius: var(--radius-sm); display: none; }
-
-        .upload-area {
-            border: 2px dashed var(--border);
-            border-radius: var(--radius);
-            padding: 22px 14px;
-            text-align: center;
-            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(220, 38, 38, 0.2);
             transition: all 0.2s;
-            background: #fafafa;
         }
-        .upload-area:hover { border-color: var(--primary); background: var(--primary-light); }
+        .mic-circle.recording { background: var(--danger); color: #fff; animation: pulse 1.2s infinite; }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,38,38,0.7); }
+            70% { transform: scale(1.06); box-shadow: 0 0 0 14px rgba(220,38,38,0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+        }
 
-        /* Deaf Result Card (High Contrast & Clear Hierarchy) */
-        .deaf-view-screen {
+        /* Deaf View Screen (App Screen) */
+        .deaf-card {
             background: #eff6ff;
-            border: 2px solid #bfdbfe;
-            border-radius: var(--radius-lg);
-            padding: 18px;
-            margin-top: 16px;
+            border: 1.5px solid #bfdbfe;
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-top: 12px;
         }
-        .deaf-view-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-        .deaf-icon-badge {
-            font-size: 30px;
-            background: #ffffff;
-            border-radius: 12px;
-            width: 48px;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: var(--shadow-sm);
-        }
-        .latency-badge {
-            font-size: 11px;
-            font-weight: 700;
-            padding: 4px 10px;
-            border-radius: 999px;
-            background: #dbeafe;
-            color: #1e40af;
-        }
-        .deaf-summary-text {
-            font-size: 20px;
-            font-weight: 800;
-            color: #1e3a8a;
-            line-height: 1.4;
-            margin-bottom: 12px;
-        }
+        .deaf-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .deaf-icon { font-size: 26px; background: #ffffff; border-radius: 8px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+        .sla-pill { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: #dbeafe; color: #1e40af; }
+        .deaf-summary { font-size: 18px; font-weight: 800; color: #1e3a8a; line-height: 1.35; margin-bottom: 10px; }
+        
+        .tags-wrap { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+        .hl-chip { padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 700; }
+        .hl-PRICE { background: #dcfce7; color: #15803d; }
+        .hl-DOSAGE { background: #ffedd5; color: #c2410c; }
+        .hl-QUANTITY { background: #f3e8ff; color: #7e22ce; }
+        .hl-TIME { background: #e0f2fe; color: #0369a1; }
+        .hl-COUNTER { background: #fef08a; color: #854d0e; }
+        .hl-OTHER { background: #f1f5f9; color: #475569; }
 
-        .highlights-container { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-        .hl-tag {
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 700;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .hl-PRICE { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-        .hl-DOSAGE { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
-        .hl-QUANTITY { background: #f3e8ff; color: #7e22ce; border: 1px solid #e9d5ff; }
-        .hl-TIME { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
-        .hl-COUNTER { background: #fef08a; color: #854d0e; border: 1px solid #fde047; }
-        .hl-OTHER { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
-
-        .quick-replies-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: #475569;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .replies-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-        .quick-reply-btn {
-            padding: 10px 12px;
+        .replies-column { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+        .reply-item {
+            padding: 9px 12px;
             background: #ffffff;
-            border: 1.5px solid #cbd5e1;
+            border: 1px solid #cbd5e1;
             border-radius: var(--radius-sm);
             font-size: 13px;
             font-weight: 600;
             color: #1e293b;
-            text-align: left;
             cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: var(--shadow-sm);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            transition: all 0.15s;
         }
-        .quick-reply-btn:hover {
-            border-color: var(--primary);
-            background: #f0f7ff;
-            color: var(--primary);
-            transform: translateY(-1px);
-        }
+        .reply-item:hover { border-color: var(--primary); background: #f0f7ff; color: var(--primary); }
 
-        /* Chips Section */
-        .chips-container { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; min-height: 44px; }
-        .chip-tag {
-            padding: 6px 12px;
+        /* ================= Tab 2: Thẻ từ ================= */
+        .chips-pool { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; min-height: 38px; }
+        .c-tag {
+            padding: 5px 10px;
             border-radius: 999px;
             background: #f1f5f9;
             border: 1px solid var(--border);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            user-select: none;
-        }
-        .chip-tag:hover { border-color: var(--primary); background: #f8fafc; }
-        .chip-tag.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
-        .chip-tag.custom { border-style: dashed; border-color: #3b82f6; background: #eff6ff; }
-        .chip-tag.custom.selected { background: var(--primary); color: #fff; border-style: solid; }
-        .chip-tag .btn-edit, .chip-tag .btn-del {
-            font-size: 13px;
-            margin-left: 2px;
-            cursor: pointer;
-            opacity: 0.6;
-            border: none;
-            background: none;
-            color: inherit;
-            padding: 0 2px;
-        }
-        .chip-tag .btn-edit:hover { opacity: 1; color: var(--primary); }
-        .chip-tag .btn-del:hover { opacity: 1; color: var(--danger); }
-
-        .ai-pill {
-            padding: 5px 11px;
-            border-radius: 999px;
-            background: #dcfce7;
-            color: #166534;
-            border: 1px solid #86efac;
             font-size: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
         }
-        .ai-pill:hover { background: #bbf7d0; transform: translateY(-1px); }
+        .c-tag.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .c-tag.custom { border-style: dashed; border-color: #3b82f6; background: #eff6ff; }
+        .c-tag.custom.selected { background: var(--primary); color: #fff; border-style: solid; }
+        .c-tag button { border: none; background: none; font-size: 12px; cursor: pointer; color: inherit; opacity: 0.7; padding: 0 1px; }
 
-        /* Camera Box */
-        .camera-viewport {
-            text-align: center;
+        /* ================= Tab 3: Camera ================= */
+        .camera-box {
             position: relative;
             background: #0f172a;
             border-radius: var(--radius);
             overflow: hidden;
-            min-height: 260px;
+            min-height: 240px;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-        .camera-video { width: 100%; max-height: 360px; object-fit: cover; display: none; transform: scaleX(-1); }
-        .hand-guide-box {
+        .camera-box video { width: 100%; max-height: 300px; object-fit: cover; display: none; transform: scaleX(-1); }
+        .camera-guide {
             position: absolute;
-            width: 65%;
+            width: 70%;
             height: 75%;
-            border: 2px dashed rgba(56, 189, 248, 0.6);
-            border-radius: 16px;
+            border: 2px dashed rgba(56, 189, 248, 0.7);
+            border-radius: 14px;
             pointer-events: none;
             display: none;
             align-items: flex-end;
             justify-content: center;
-            padding-bottom: 8px;
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 11px;
-            font-weight: 600;
+            padding-bottom: 6px;
+            color: #bae6fd;
+            font-size: 10px;
+            font-weight: 700;
         }
-        .countdown-overlay {
+        .count-cover {
             display: none;
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0,0,0,0.7);
             color: #fff;
             align-items: center;
             justify-content: center;
@@ -499,425 +389,276 @@
             z-index: 20;
         }
 
-        /* Hybrid VSL Simulator keyboard */
-        .vsl-key-grid { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
-        .vsl-key-btn {
-            padding: 6px 12px;
+        /* ================= Tab 4: Hybrid ================= */
+        .vsl-keys { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+        .vsl-btn {
+            padding: 5px 9px;
             background: #f8fafc;
             border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            font-size: 12px;
+            border-radius: 6px;
+            font-size: 11px;
             font-weight: 700;
-            color: #1e293b;
             cursor: pointer;
-            transition: all 0.15s;
         }
-        .vsl-key-btn:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
-        .vsl-key-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .vsl-btn:hover { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
 
-        /* Loading States */
-        .loading-spinner-box {
-            display: none;
-            text-align: center;
-            padding: 18px;
-            color: var(--primary);
-            font-weight: 700;
-            font-size: 13px;
-        }
-
-        /* Responsive Breakpoints */
-        @media (max-width: 640px) {
-            body { padding: 8px 6px 50px; }
-            .brand-title { font-size: 20px; }
-            .tabs-nav { gap: 4px; }
-            .tab-btn { min-width: 110px; font-size: 12px; padding: 8px 10px; }
-            .card { padding: 14px; border-radius: var(--radius); }
-            .form-col { min-width: 100%; }
-            .preset-grid { grid-template-columns: 1fr; }
-            .replies-grid { grid-template-columns: 1fr; }
-            .deaf-summary-text { font-size: 18px; }
-        }
+        .spinner-msg { display: none; text-align: center; padding: 12px; color: var(--primary); font-size: 12px; font-weight: 700; }
     </style>
 </head>
 <body>
 
-<div class="app-wrapper" id="appWrapper">
+<div class="app-wrapper app-mode" id="appWrapper">
     <!-- Header -->
-    <header>
-        <div class="brand-title">🌉 SignBridge AI Studio</div>
-        <div class="brand-subtitle">Nền tảng Hai Chiều: STT PhoWhisper, Tóm tắt Thông minh & Nhận diện Ký hiệu VSL cho Người Khiếm thính</div>
-        
-        <!-- Live System Health Strip -->
-        <div class="health-bar" id="healthBar">
-            <div class="health-item"><span class="health-dot online" id="dotServer"></span> Server: <strong id="lblServer">OK</strong></div>
-            <div class="health-item"><span class="health-dot online" id="dotWhisper"></span> PhoWhisper: <strong id="lblWhisper">Ready</strong></div>
-            <div class="health-item"><span class="health-dot online" id="dotDb"></span> DB: <strong id="lblDb">Active</strong></div>
-            <div class="health-item"><span class="health-dot online" id="dotVsl"></span> VSL Model: <strong id="lblVsl">2,764 nhãn</strong></div>
-            <div class="health-item"><span class="health-dot online" id="dotLlm"></span> LLM: <strong id="lblLlm">Ready</strong></div>
-        </div>
-
-        <!-- Top User & Simulator Toolbar -->
-        <div class="top-toolbar">
-            <div class="user-pill">
-                <span>👤 User ID: <strong id="userIdDisplay" style="color:var(--primary);">...</strong></span>
-                <button class="btn-ghost-sm" onclick="promptChangeUserId()">Đổi ID</button>
-            </div>
-            <div>
-                <button class="mode-toggle-btn" id="btnToggleSim" onclick="toggleMobileSimulator()">
-                    <span>📱 Mô phỏng Điện thoại</span>
-                </button>
-            </div>
+    <header class="app-header">
+        <div class="app-logo">🌉 SignBridge</div>
+        <div class="header-actions">
+            <span class="user-chip" id="userPill" onclick="promptChangeUserId()" title="Chạm để đổi User ID">👤 <strong id="userIdDisplay">...</strong></span>
+            <button class="btn-view-toggle" id="btnToggleSim" onclick="toggleViewMode()">🖥️ Desktop</button>
         </div>
     </header>
 
-    <!-- 1-Click Quick Preset Test Scenarios -->
-    <div class="preset-card">
-        <div class="preset-header">
-            <div class="preset-title">⚡ Kịch bản Test Nhanh 1-Click (Demo tức thì)</div>
-            <span style="font-size: 11px; color: var(--muted);">Bấm để tự động điền & test ngay</span>
-        </div>
-        <div class="preset-grid">
-            <div class="preset-btn" onclick="applyPreset('CAFE', 'Một cà phê sữa đá mang đi 35 nghìn em nhé', 'Cho em gọi món với ạ')">
-                <span class="preset-badge">☕ Quán Cà phê (CAFE)</span>
-                <span class="preset-text">"Cà phê sữa đá mang đi 35k..."</span>
-            </div>
-            <div class="preset-btn" onclick="applyPreset('PHARMACY', 'Em bị đau đầu với sốt 2 ngày nay rồi, lấy cho em vỉ thuốc hạ sốt giảm đau 20 nghìn uống sau ăn nhé', 'Tôi cần mua thuốc đau đầu')">
-                <span class="preset-badge">💊 Nhà thuốc (PHARMACY)</span>
-                <span class="preset-text">"Đau đầu, sốt 2 ngày, vỉ thuốc 20k..."</span>
-            </div>
-            <div class="preset-btn" onclick="applyPreset('PUBLIC', 'Chào anh, anh cầm CCCD và giấy khai sinh sang quầy số 3 nộp giúp tôi nhé', 'Tôi muốn làm thủ tục')">
-                <span class="preset-badge">🏛️ Hành chính (PUBLIC)</span>
-                <span class="preset-text">"Cầm CCCD sang quầy số 3..."</span>
-            </div>
-            <div class="preset-btn" onclick="applyPreset('CUSTOM', 'Tổng tiền của anh hết 120 nghìn, anh thanh toán bằng tiền mặt hay quét mã QR ạ?', 'Hết bao nhiêu tiền ạ')">
-                <span class="preset-badge">💳 Thanh toán (CUSTOM)</span>
-                <span class="preset-text">"Tổng 120k, quét mã QR..."</span>
-            </div>
-        </div>
+    <!-- Compact Health Dots -->
+    <div class="health-strip">
+        <span class="h-dot-pill"><span class="dot ok" id="dotServer"></span> Server</span>
+        <span class="h-dot-pill"><span class="dot ok" id="dotWhisper"></span> PhoWhisper</span>
+        <span class="h-dot-pill"><span class="dot ok" id="dotDb"></span> DB</span>
+        <span class="h-dot-pill"><span class="dot ok" id="dotVsl"></span> VSL 2.7k</span>
+        <span class="h-dot-pill"><span class="dot ok" id="dotLlm"></span> AI</span>
+    </div>
+
+    <!-- Quick Presets Scroll Bar -->
+    <div class="preset-scroll-container">
+        <span style="font-size: 11px; font-weight: 700; color: var(--muted); flex-shrink: 0;">⚡ Test nhanh:</span>
+        <button class="preset-chip" onclick="applyPreset('CAFE', 'Một cà phê sữa đá mang đi 35 nghìn em nhé', 'Cho em gọi món')">☕ Cà phê 35k</button>
+        <button class="preset-chip" onclick="applyPreset('PHARMACY', 'Bị đau đầu sốt 2 ngày, lấy 1 vỉ Panadol 20 nghìn uống sau ăn', 'Mua thuốc đau đầu')">💊 Thuốc đau đầu 20k</button>
+        <button class="preset-chip" onclick="applyPreset('PUBLIC', 'Cầm CCCD và giấy tờ này sang quầy số 3 nộp nhé', 'Làm thủ tục')">🏛️ Quầy số 3</button>
+        <button class="preset-chip" onclick="applyPreset('CUSTOM', 'Tổng 120 nghìn, quét mã QR hay tiền mặt?', 'Hết bao nhiêu')">💳 Quét mã QR 120k</button>
     </div>
 
     <!-- Main Navigation Tabs -->
-    <div class="tabs-nav">
-        <button class="tab-btn active" onclick="switchTab('summarize')">🎙️ Chiều Về: Giọng nói</button>
-        <button class="tab-btn" onclick="switchTab('expand')">🖐️ Chiều Đi: Thẻ Từ Khóa</button>
-        <button class="tab-btn" onclick="switchTab('camera')">📷 Chiều Đi: Camera VSL</button>
-        <button class="tab-btn" onclick="switchTab('hybrid')">🤖 Chiều Đi: Giả lập Hybrid</button>
-    </div>
+    <nav class="tab-bar">
+        <button class="tab-item active" onclick="switchTab('summarize')">🎙️ Chiều về</button>
+        <button class="tab-item" onclick="switchTab('expand')">🖐️ Thẻ từ</button>
+        <button class="tab-item" onclick="switchTab('camera')">📷 Camera VSL</button>
+        <button class="tab-item" onclick="switchTab('hybrid')">🤖 Giả lập</button>
+    </nav>
 
-    <!-- ==================== TAB 1: CHIỀU VỀ (GIỌNG NÓI -> TÓM TẮT) ==================== -->
-    <div id="tab-summarize" class="tab-page">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">🎙️ Chiều Về: Nhân viên nói ➔ Tóm tắt cho Người Khiếm thính</div>
-                <span class="latency-badge" id="slaIndicator">SLA: &lt; 5.0s</span>
+    <!-- ==================== TAB 1: CHIỀU VỀ ==================== -->
+    <div id="tab-summarize" class="tab-view">
+        <div class="app-card">
+            <div class="row-compact">
+                <select id="contextSelect" onchange="onContextChange()" style="flex:1;">
+                    <option value="CAFE">Quán Ăn / Cà Phê</option>
+                    <option value="PHARMACY">Hiệu Thuốc / Y Tế</option>
+                    <option value="PUBLIC">Hành Chính Công</option>
+                    <option value="CUSTOM" selected>Tự do / Mặc định</option>
+                </select>
+                <input type="text" id="prevOutgoing" placeholder="Ý người khiếm thính nói trước đó..." style="flex:1;">
             </div>
 
-            <div class="form-row">
-                <div class="form-col">
-                    <label>Bối cảnh Cuộc gọi / Quầy dịch vụ (Context):</label>
-                    <select id="contextSelect" onchange="onContextChange()">
-                        <option value="CAFE">Quán Ăn / Cà Phê (CAFE)</option>
-                        <option value="PHARMACY">Hiệu Thuốc / Bệnh Viện (PHARMACY)</option>
-                        <option value="PUBLIC">Hành Chính Công (PUBLIC)</option>
-                        <option value="CUSTOM" selected>Tự do / Mặc định (CUSTOM)</option>
-                    </select>
-                </div>
-                <div class="form-col">
-                    <label>Câu người khiếm thính vừa nói trước đó (previousOutgoing):</label>
-                    <input type="text" id="prevOutgoing" placeholder="VD: Cho em hỏi bao nhiêu tiền ạ?">
-                </div>
+            <!-- Submode Switch -->
+            <div class="submode-switch">
+                <button class="submode-item active" id="btnSubMic" onclick="switchAudioSubmode('mic')">🎤 Micro</button>
+                <button class="submode-item" id="btnSubUpload" onclick="switchAudioSubmode('upload')">📁 File</button>
+                <button class="submode-item" id="btnSubText" onclick="switchAudioSubmode('text')">⚡ Gõ chữ</button>
             </div>
 
-            <!-- Audio Input Sub-modes -->
-            <div class="audio-submodes">
-                <button class="submode-btn active" id="btnSubMic" onclick="switchAudioSubmode('mic')">🔴 Ghi âm Micro</button>
-                <button class="submode-btn" id="btnSubUpload" onclick="switchAudioSubmode('upload')">📁 Tải file âm thanh</button>
-                <button class="submode-btn" id="btnSubText" onclick="switchAudioSubmode('text')">⚡ Nhập văn bản test nhanh</button>
-            </div>
-
-            <!-- Mode 1: Live Mic -->
+            <!-- Mode 1: Mic -->
             <div id="submode-mic">
-                <div class="mic-box">
-                    <button id="micBtn" class="mic-btn" onclick="toggleRecord()">🎤</button>
-                    <div id="micLabel" style="margin-top:10px; font-weight:700; font-size:14px; color:var(--muted);">Bấm để bắt đầu ghi âm giọng nói nhân viên</div>
-                    <div id="recordTime" style="font-size:14px; color:var(--danger); margin-top:4px; font-weight:800; display:none;">00:00</div>
-                    <canvas id="audioVisualizer" class="audio-visualizer-canvas"></canvas>
+                <div class="mic-area">
+                    <button id="micBtn" class="mic-circle" onclick="toggleRecord()">🎤</button>
+                    <div id="micLabel" style="font-size:12px; font-weight:600; color:var(--muted); margin-top:8px;">Chạm để ghi âm giọng nói</div>
+                    <div id="recordTime" style="font-size:12px; font-weight:700; color:var(--danger); display:none; margin-top:2px;">00:00</div>
+                    <canvas id="audioVisualizer" style="width:100%; height:36px; display:none; margin-top:6px; border-radius:6px;"></canvas>
                 </div>
-                <audio id="audioPlayback" controls style="width:100%; display:none; margin-top:10px;"></audio>
-                <button id="submitMicBtn" class="btn-primary" style="display:none; margin-top:12px;" onclick="submitAudioData(recordedBlob, 'mic.webm')">
-                    🚀 Phiên âm PhoWhisper & Tóm tắt ngay
+                <audio id="audioPlayback" controls style="width:100%; display:none; margin-top:8px;"></audio>
+                <button id="submitMicBtn" class="btn-action" style="display:none; margin-top:8px;" onclick="submitAudioData(recordedBlob, 'mic.webm')">
+                    🚀 Tóm tắt đoạn này
                 </button>
             </div>
 
-            <!-- Mode 2: File Upload -->
+            <!-- Mode 2: Upload -->
             <div id="submode-upload" style="display:none;">
-                <div class="upload-area" onclick="document.getElementById('audioFileInput').click()">
-                    <div style="font-size:36px; margin-bottom:6px;">📤</div>
-                    <div id="fileNameDisplay" style="font-weight:700; font-size:14px;">Bấm hoặc Kéo thả file âm thanh vào đây</div>
-                    <div style="font-size:12px; color:var(--muted); margin-top:4px;">Hỗ trợ .mp3, .m4a, .wav, .webm (Tối đa 2 MB)</div>
+                <div style="border: 2px dashed var(--border); border-radius: var(--radius-sm); padding: 18px; text-align: center; cursor: pointer;" onclick="document.getElementById('audioFileInput').click()">
+                    <div style="font-size:28px;">📤</div>
+                    <div id="fileNameDisplay" style="font-size:12px; font-weight:700; margin-top:4px;">Chọn file .mp3, .m4a, .wav (≤ 2MB)</div>
                 </div>
                 <input type="file" id="audioFileInput" accept="audio/*" style="display:none;" onchange="handleFilePicked(this)">
-                <button id="submitFileBtn" class="btn-primary" style="margin-top:12px;" disabled onclick="submitFileAudio()">
-                    🚀 Phiên âm & Tóm tắt file này
+                <button id="submitFileBtn" class="btn-action" style="margin-top:8px;" disabled onclick="submitFileAudio()">
+                    🚀 Tóm tắt file âm thanh
                 </button>
             </div>
 
-            <!-- Mode 3: Direct Text Fast Test -->
+            <!-- Mode 3: Text -->
             <div id="submode-text" style="display:none;">
-                <label>Nhập nội dung văn bản nhân viên nói (Test trực tiếp LLM không qua STT):</label>
-                <textarea id="directTextInput" rows="2" placeholder="VD: Một cà phê sữa đá mang đi 35 nghìn em nhé"></textarea>
-                <button class="btn-primary" style="margin-top:10px;" onclick="submitDirectText()">⚡ Tóm tắt tức thì (&lt; 500ms)</button>
+                <input type="text" id="directTextInput" placeholder="Nhập câu nhân viên nói để test nhanh..." style="margin-bottom:8px;">
+                <button class="btn-action" onclick="submitDirectText()">⚡ Tóm tắt tức thì (&lt; 0.5s)</button>
             </div>
 
-            <!-- Loading Spinner -->
-            <div id="summarizeLoading" class="loading-spinner-box">
-                ⏳ Đang xử lý qua PhoWhisper & LLM... Vui lòng đợi trong giây lát!
-            </div>
+            <div id="summarizeLoading" class="spinner-msg">⏳ Đang xử lý qua PhoWhisper &amp; AI...</div>
 
-            <!-- Kết quả hiển thị cho người khiếm thính (Deaf View) -->
+            <!-- Màn hình Người Khiếm Thính (Deaf Screen) -->
             <div id="deafResultBox" style="display:none;">
-                <div class="deaf-view-screen">
-                    <div class="deaf-view-top">
-                        <div id="iconDisplay" class="deaf-icon-badge">ℹ️</div>
-                        <div>
-                            <span id="procTimeBadge" class="latency-badge">0.0s</span>
-                        </div>
+                <div class="deaf-card">
+                    <div class="deaf-card-header">
+                        <div id="iconDisplay" class="deaf-icon">ℹ️</div>
+                        <span id="procTimeBadge" class="sla-pill">0.0s</span>
                     </div>
-                    <div id="summaryDisplay" class="deaf-summary-text">Chưa có kết quả</div>
-                    <div id="highlightsBox" class="highlights-container"></div>
+                    <div id="summaryDisplay" class="deaf-summary">...</div>
+                    <div id="highlightsBox" class="tags-wrap"></div>
 
-                    <div class="quick-replies-title">⚡ 3 CÂU PHẢN HỒI NHANH (CHẠM ĐỂ PHÁT ÂM RA LOA):</div>
-                    <div id="repliesGrid" class="replies-grid"></div>
+                    <div style="font-size:11px; font-weight:700; color:var(--muted); margin-top:6px; text-transform:uppercase;">⚡ Phản hồi nhanh (Chạm phát loa):</div>
+                    <div id="repliesGrid" class="replies-column"></div>
 
                     <!-- Gợi ý từ khóa AI -->
-                    <div style="margin-top:14px; padding:12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:var(--radius-sm);">
-                        <span style="font-size:12px; font-weight:700; color:#15803d; text-transform:uppercase;">💡 GỢI Ý TỪ KHÓA ĐỂ BẠN TRẢ LỜI:</span>
-                        <div id="summarySuggestedChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+                    <div style="margin-top:10px; padding:8px 10px; background:#f0fdf4; border-radius:8px;">
+                        <span style="font-size:11px; font-weight:700; color:#15803d;">💡 Gợi ý trả lời:</span>
+                        <div id="summarySuggestedChips" style="display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;"></div>
                     </div>
                 </div>
 
-                <div style="background:#f8fafc; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; margin-top:12px; font-size:13px;">
-                    <span style="font-weight:700; color:var(--muted);">VĂN BẢN ĐẦY ĐỦ TỪ PHOWHISPER:</span>
-                    <p id="transcriptDisplay" style="margin-top:4px; font-weight:600; color:#1e293b;"></p>
+                <div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-top:8px; font-size:12px; color:#475569;">
+                    <strong>Văn bản gốc:</strong> <span id="transcriptDisplay"></span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ==================== TAB 2: CHIỀU ĐI (CHỌN THẺ TỪ KHÓA) ==================== -->
-    <div id="tab-expand" class="tab-page" style="display:none;">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">🖐️ Chiều Đi: Người khiếm thính Chọn Thẻ Từ Khóa ➔ Phát Loa</div>
-            </div>
-            <div class="card-subtitle">Chạm vào các thẻ từ khóa bên dưới để mô phỏng người khiếm thính chọn ý muốn diễn đạt. Thẻ viền nét đứt là thẻ riêng của bạn (có nút ✏️ sửa, ❌ xóa):</div>
-
-            <!-- Danh sách thẻ từ PostgreSQL -->
-            <div class="chips-container" id="presetChips">
-                <span style="color:var(--muted); font-size:13px;">Đang tải danh sách thẻ từ PostgreSQL...</span>
+    <!-- ==================== TAB 2: THẺ TỪ (CHIỀU ĐI) ==================== -->
+    <div id="tab-expand" class="tab-view" style="display:none;">
+        <div class="app-card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:12px; font-weight:700; color:var(--text);">Chọn thẻ từ khóa muốn nói:</span>
+                <button onclick="requestAiChips()" style="border:none; background:none; color:var(--primary); font-size:11px; font-weight:700; cursor:pointer;">✨ AI gợi ý</button>
             </div>
 
-            <!-- Form Thêm thẻ cá nhân -->
-            <div style="display:flex; gap:8px; margin: 10px 0; flex-wrap:wrap;">
-                <input type="text" id="newChipInput" placeholder="Thêm thẻ cá nhân mới (VD: Dị ứng tôm, Ít đường)..." style="flex:1; min-width:180px;" onkeydown="if(event.key==='Enter') addNewChip()">
-                <button class="btn-primary" style="width:auto; padding:8px 16px; margin:0; white-space:nowrap;" onclick="addNewChip()">➕ Thêm Thẻ</button>
-                <button style="width:auto; padding:8px 14px; margin:0; white-space:nowrap; background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; font-weight:600; color:var(--muted);" onclick="resetCustomChips()" title="Khôi phục thẻ mặc định">🔄 Đặt lại</button>
+            <!-- Chips Container -->
+            <div class="chips-pool" id="presetChips">
+                <span style="font-size:11px; color:var(--muted);">Đang tải thẻ...</span>
             </div>
 
-            <!-- Gợi ý thẻ từ AI -->
-            <div style="margin-top:12px; padding:12px; background:#f8fafc; border:1.5px dashed #93c5fd; border-radius:var(--radius-sm);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <span style="font-size:12px; font-weight:700; color:#1e40af;">✨ AI GỢI Ý THẺ THEO BỐI CẢNH:</span>
-                    <button class="btn-ghost-sm" onclick="requestAiChips()">✨ Sinh thêm thẻ mới</button>
-                </div>
-                <div id="aiSuggestedChipsContainer" style="display:flex; flex-wrap:wrap; gap:6px;">
-                    <span style="font-size:12px; color:var(--muted); font-style:italic;">Bấm 'Sinh thêm thẻ mới' để AI tạo từ khóa gợi ý thông minh...</span>
-                </div>
+            <div id="aiSuggestedChipsContainer" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;"></div>
+
+            <!-- Form thêm thẻ -->
+            <div style="display:flex; gap:6px; margin: 8px 0;">
+                <input type="text" id="newChipInput" placeholder="Thêm thẻ riêng (VD: Ít đá, Dị ứng)..." style="flex:1; padding:7px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px;" onkeydown="if(event.key==='Enter') addNewChip()">
+                <button class="btn-action" style="width:auto; padding:7px 14px;" onclick="addNewChip()">➕</button>
+                <button style="border:1px solid var(--border); background:#fff; border-radius:8px; padding:7px 10px; font-size:12px; cursor:pointer;" onclick="resetCustomChips()" title="Đặt lại mặc định">🔄</button>
             </div>
 
-            <div style="margin-top:14px;">
-                <label>Các thẻ đã chọn (ngăn cách bằng dấu phẩy):</label>
-                <input type="text" id="customChipsInput" placeholder="VD: Trà sữa trân châu, Ít đường, 50% đá">
-            </div>
+            <input type="text" id="customChipsInput" placeholder="Thẻ đã chọn..." style="margin-top:6px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; font-size:12px; width:100%;">
 
-            <button class="btn-primary" style="margin-top:12px;" onclick="submitExpand()">
-                🗣️ Mở rộng thành Câu Lời Nói Lịch Sự (/api/expand)
+            <button class="btn-action" style="margin-top:10px;" onclick="submitExpand()">
+                🗣️ Tạo câu nói lịch sự
             </button>
 
-            <!-- Kết quả Expand -->
-            <div id="expandResultBox" style="display:none; margin-top:16px;">
-                <div style="background:#f0fdf4; border:2px solid #bbf7d0; border-radius:var(--radius); padding:16px;">
-                    <div style="font-size:12px; font-weight:700; color:#15803d; text-transform:uppercase;">🔊 CÂU NÓI LỊCH SỰ CHO NHÂN VIÊN NGHE:</div>
-                    <div id="spokenSentenceDisplay" style="font-size:19px; font-weight:800; color:#15803d; line-height:1.5; margin-top:6px;"></div>
-                    
-                    <div style="display:flex; gap:10px; margin-top:12px; align-items:center; flex-wrap:wrap;">
-                        <button class="btn-primary btn-success" style="width:auto; padding:8px 18px; margin:0;" onclick="speakCurrentSentence()">
-                            🔊 Phát âm thanh (TTS)
-                        </button>
-                        <span style="font-size:12px; color:var(--muted);">Tốc độ giọng đọc:</span>
-                        <select id="ttsRateSelect" style="width:auto; padding:4px 8px; font-size:12px;">
-                            <option value="0.9">0.9x (Chậm rõ)</option>
-                            <option value="1.0" selected>1.0x (Tự nhiên)</option>
-                            <option value="1.1">1.1x (Nhanh)</option>
-                        </select>
-                    </div>
+            <!-- Result -->
+            <div id="expandResultBox" style="display:none; margin-top:12px;">
+                <div style="background:#f0fdf4; border:1.5px solid #bbf7d0; border-radius:var(--radius); padding:12px;">
+                    <div style="font-size:11px; font-weight:700; color:#15803d;">CÂU LỜI NÓI CHO NHÂN VIÊN NGHE:</div>
+                    <div id="spokenSentenceDisplay" style="font-size:16px; font-weight:800; color:#15803d; line-height:1.4; margin-top:4px;"></div>
+                    <button class="btn-action btn-green" style="margin-top:10px; width:auto; padding:7px 14px;" onclick="speakCurrentSentence()">
+                        🔊 Phát âm thanh (TTS)
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ==================== TAB 3: CHIỀU ĐI (CAMERA WEBCAM VSL) ==================== -->
-    <div id="tab-camera" class="tab-page" style="display:none;">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">📷 Chiều Đi: Nhận diện Cử chỉ Ký hiệu qua Camera (Live Webcam VSL)</div>
-            </div>
-            <div class="card-subtitle">Bật webcam, bấm quay và giơ tay làm cử chỉ ký hiệu. Hệ thống sẽ chụp tự động 4 frame JPEG chuẩn gửi lên AI nhận diện:</div>
-
-            <div class="camera-viewport">
-                <video id="webcamVideo" class="camera-video" autoplay playsinline muted></video>
-                <div class="hand-guide-box" id="handGuideBox">ĐẶT TAY & THÂN TRÊN TRONG KHUNG</div>
-                <div id="webcamPlaceholder" style="color:#94a3b8; padding:36px 16px;">
-                    <div style="font-size:44px; margin-bottom:6px;">📹</div>
-                    <div style="font-weight:700; font-size:14px;">Camera chưa được bật</div>
-                    <div style="font-size:12px; margin-top:4px;">Bấm nút "Mở Camera" bên dưới để cấp quyền</div>
+    <!-- ==================== TAB 3: CAMERA VSL ==================== -->
+    <div id="tab-camera" class="tab-view" style="display:none;">
+        <div class="app-card">
+            <div class="camera-box">
+                <video id="webcamVideo" autoplay playsinline muted></video>
+                <div class="camera-guide" id="handGuideBox">ĐẶT TAY TRONG KHUNG</div>
+                <div id="webcamPlaceholder" style="color:#94a3b8; text-align:center; padding:24px 10px;">
+                    <div style="font-size:36px;">📹</div>
+                    <div style="font-size:13px; font-weight:700; margin-top:4px;">Camera chưa bật</div>
                 </div>
-                <!-- Countdown Overlay -->
-                <div id="cameraCountdownOverlay" class="countdown-overlay">
-                    <div id="countdownNumber" style="font-size:68px; font-weight:800; color:#38bdf8;">3</div>
-                    <div id="countdownLabel" style="font-size:15px; font-weight:600; margin-top:8px;">Chuẩn bị làm cử chỉ tay...</div>
+                <!-- Countdown -->
+                <div id="cameraCountdownOverlay" class="count-cover">
+                    <div id="countdownNumber" style="font-size:54px; font-weight:800; color:#38bdf8;">3</div>
+                    <div id="countdownLabel" style="font-size:13px; font-weight:600; margin-top:4px;">Chuẩn bị...</div>
                 </div>
             </div>
 
             <canvas id="captureCanvas" style="display:none;"></canvas>
 
-            <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;">
-                <button id="btnToggleCamera" class="btn-primary btn-secondary" style="flex:1; margin:0;" onclick="toggleWebcam()">
-                    🎥 Mở Camera
+            <div style="display:flex; gap:6px; margin-top:10px;">
+                <button id="btnToggleCamera" class="btn-action btn-gray" style="flex:1;" onclick="toggleWebcam()">
+                    🎥 Bật Cam
                 </button>
-                <button id="btnSwitchCam" class="btn-primary btn-secondary" style="width:auto; margin:0; display:none;" onclick="switchCameraFacing()">
-                    🔄 Đổi Camera
+                <button id="btnSwitchCam" class="btn-action btn-gray" style="width:auto; display:none;" onclick="switchCameraFacing()">
+                    🔄
                 </button>
-                <button id="btnCaptureSign" class="btn-primary" style="flex:2; margin:0;" disabled onclick="startSignCaptureSequence()">
-                    🔴 Quay Cử chỉ (Chụp 4 frames / 1.5s)
+                <button id="btnCaptureSign" class="btn-action" style="flex:2;" disabled onclick="startSignCaptureSequence()">
+                    🔴 Chụp 4 frame (1.5s)
                 </button>
             </div>
 
-            <!-- Preview 4 Frame thumbnails -->
-            <div id="capturedFramesBox" style="display:none; margin-top:12px;">
-                <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:6px;">4 KHUNG HÌNH VỪA CHỤP ĐÃ GỬI LÊN AI:</div>
-                <div id="framesThumbnails" style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;"></div>
+            <div id="capturedFramesBox" style="display:none; margin-top:8px;">
+                <div id="framesThumbnails" style="display:flex; gap:4px; justify-content:center;"></div>
             </div>
 
-            <div id="cameraLoadingBox" class="loading-spinner-box">
-                ⏳ Đang gửi 4 frames lên AI nhận diện ngôn ngữ ký hiệu... Vui lòng đợi trong giây lát!
-            </div>
+            <div id="cameraLoadingBox" class="spinner-msg">⏳ AI đang nhận diện cử chỉ...</div>
 
-            <!-- Kết quả Sign -->
-            <div id="signResultBox" style="display:none; margin-top:16px;">
-                <div style="background:#eff6ff; border:2px solid #bfdbfe; border-radius:var(--radius); padding:16px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
-                        <div>
-                            <span style="font-size:11px; font-weight:700; color:#1e40af;">KÝ HIỆU NHẬN DIỆN (GLOSSES):</span>
-                            <div id="signGlossesDisplay" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:4px;"></div>
-                        </div>
-                        <span id="signConfidenceBadge" class="latency-badge" style="background:#dcfce7; color:#166534; font-size:13px;">90%</span>
+            <!-- Sign Result -->
+            <div id="signResultBox" style="display:none; margin-top:10px;">
+                <div style="background:#eff6ff; border:1.5px solid #bfdbfe; border-radius:var(--radius); padding:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div id="signGlossesDisplay" style="display:flex; gap:4px; flex-wrap:wrap;"></div>
+                        <span id="signConfidenceBadge" class="sla-pill" style="background:#dcfce7; color:#166534;">90%</span>
                     </div>
-
-                    <div style="margin-top:8px;">
-                        <span style="font-size:11px; font-weight:700; color:#15803d;">CÂU LỜI NÓI DỊCH TỪ KÝ HIỆU:</span>
-                        <div id="signSpokenSentenceDisplay" style="font-size:18px; font-weight:800; color:#15803d; line-height:1.4; margin-top:4px;"></div>
-                    </div>
-
-                    <div style="display:flex; gap:8px; margin-top:12px;">
-                        <button class="btn-primary btn-success" style="width:auto; padding:8px 16px; margin:0;" onclick="speakSignSentence()">
-                            🔊 Phát âm thanh (TTS)
-                        </button>
-                    </div>
-
-                    <div style="margin-top:12px; border-top:1px dashed #bfdbfe; padding-top:8px;">
-                        <span style="font-size:11px; font-weight:700; color:var(--muted);">GỢI Ý THẺ TIẾP THEO:</span>
-                        <div id="signSuggestedChipsDisplay" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;"></div>
-                    </div>
+                    <div id="signSpokenSentenceDisplay" style="font-size:16px; font-weight:800; color:#15803d; margin-top:8px; line-height:1.4;"></div>
+                    <button class="btn-action btn-green" style="margin-top:8px; width:auto; padding:6px 14px;" onclick="speakSignSentence()">
+                        🔊 Phát âm thanh
+                    </button>
+                    <div id="signSuggestedChipsDisplay" style="display:flex; gap:4px; flex-wrap:wrap; margin-top:8px;"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ==================== TAB 4: GIẢ LẬP HYBRID VSL GLOSSES ==================== -->
-    <div id="tab-hybrid" class="tab-page" style="display:none;">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">🤖 Chiều Đi: Giả lập Nhận diện Ký hiệu Offline Hybrid (/api/sign/glosses)</div>
-            </div>
-            <div class="card-subtitle">Kiểm thử luồng Mobile nhận diện TFLite offline và gửi danh sách nhãn lên Server để ghép câu tự nhiên theo quy chuẩn mục 4.2a &amp; 7.4:</div>
-
-            <div style="margin-bottom:12px;">
-                <label>Bấm chọn các ký hiệu VSL vào chuỗi:</label>
-                <div class="vsl-key-grid">
-                    <button class="vsl-key-btn" onclick="addHybridGloss('XIN CHÀO')">👋 XIN CHÀO</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('CẢM ƠN')">🙏 CẢM ƠN</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('CÀ PHÊ')">☕ CÀ PHÊ</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('ĐÁ')">🧊 ĐÁ</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('MANG ĐI')">🛍️ MANG ĐI</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('ĐAU')">⚡ ĐAU</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('ĐẦU')">💆 ĐẦU</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('BỤNG')">🤰 BỤNG</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('SỐT')">🌡️ SỐT</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('THUỐC')">💊 THUỐC</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('MUA')">🛒 MUA</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('GIẤY TỜ')">📄 GIẤY TỜ</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('Ở ĐÂU')">❓ Ở ĐÂU</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('MỘT')">1️⃣ MỘT</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('HAI')">2️⃣ HAI</button>
-                    <button class="vsl-key-btn" onclick="addHybridGloss('NGÀY')">📅 NGÀY</button>
-                    <button class="vsl-key-btn" style="color:var(--danger);" onclick="addHybridGloss('UNKNOWN')">❓ UNKNOWN</button>
-                </div>
+    <!-- ==================== TAB 4: GIẢ LẬP HYBRID VSL ==================== -->
+    <div id="tab-hybrid" class="tab-view" style="display:none;">
+        <div class="app-card">
+            <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px;">Chạm ký hiệu VSL vào chuỗi:</div>
+            <div class="vsl-keys">
+                <button class="vsl-btn" onclick="addHybridGloss('XIN CHÀO')">👋 Chào</button>
+                <button class="vsl-btn" onclick="addHybridGloss('CẢM ƠN')">🙏 Cảm ơn</button>
+                <button class="vsl-btn" onclick="addHybridGloss('CÀ PHÊ')">☕ Cà phê</button>
+                <button class="vsl-btn" onclick="addHybridGloss('ĐÁ')">🧊 Đá</button>
+                <button class="vsl-btn" onclick="addHybridGloss('MANG ĐI')">🛍️ Mang đi</button>
+                <button class="vsl-btn" onclick="addHybridGloss('ĐAU')">⚡ Đau</button>
+                <button class="vsl-btn" onclick="addHybridGloss('ĐẦU')">💆 Đầu</button>
+                <button class="vsl-btn" onclick="addHybridGloss('BỤNG')">🤰 Bụng</button>
+                <button class="vsl-btn" onclick="addHybridGloss('THUỐC')">💊 Thuốc</button>
+                <button class="vsl-btn" onclick="addHybridGloss('MUA')">🛒 Mua</button>
+                <button class="vsl-btn" onclick="addHybridGloss('GIẤY TỜ')">📄 Giấy tờ</button>
+                <button class="vsl-btn" onclick="addHybridGloss('UNKNOWN')" style="color:var(--danger);">❓ UNKNOWN</button>
             </div>
 
-            <div class="form-row">
-                <div class="form-col">
-                    <label>Chuỗi Ký hiệu đã chọn (glosses):</label>
-                    <input type="text" id="hybridGlossesInput" value="ĐAU, ĐẦU, MUA, THUỐC" placeholder="VD: ĐAU, ĐẦU, MUA, THUỐC">
-                </div>
-                <div class="form-col" style="max-width:220px;">
-                    <label>Độ tin cậy (Confidence): <strong id="hybridConfDisplay" style="color:var(--primary);">0.85</strong></label>
+            <div class="row-compact" style="margin-top:8px;">
+                <input type="text" id="hybridGlossesInput" value="ĐAU, ĐẦU, MUA, THUỐC" style="flex:2;">
+                <div style="flex:1; font-size:11px;">
+                    <span>Conf: <strong id="hybridConfDisplay" style="color:var(--primary);">0.85</strong></span>
                     <input type="range" id="hybridConfRange" min="0.1" max="1.0" step="0.05" value="0.85" style="width:100%;" oninput="document.getElementById('hybridConfDisplay').innerText = this.value">
                 </div>
             </div>
 
-            <div style="display:flex; gap:8px; margin-top:6px;">
-                <button class="btn-primary" style="flex:2;" onclick="submitHybridGlosses()">
-                    🚀 Gửi tới /api/sign/glosses
-                </button>
-                <button class="btn-primary btn-secondary" style="flex:1;" onclick="clearHybridGlosses()">
-                    🗑️ Xóa chuỗi
-                </button>
+            <div style="display:flex; gap:6px; margin-top:6px;">
+                <button class="btn-action" style="flex:2;" onclick="submitHybridGlosses()">🚀 Ghép câu (/api/sign/glosses)</button>
+                <button class="btn-action btn-gray" style="flex:1;" onclick="clearHybridGlosses()">🗑️ Xóa</button>
             </div>
 
-            <!-- Hybrid Result -->
-            <div id="hybridResultBox" style="display:none; margin-top:16px;">
-                <div style="background:#eff6ff; border:2px solid #bfdbfe; border-radius:var(--radius); padding:16px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-size:12px; font-weight:700; color:#1e40af;">KẾT QUẢ KIỂM DUYỆT BỞI SERVER:</span>
-                        <span id="hybridResultBadge" class="latency-badge">Đủ tin cậy</span>
-                    </div>
-
-                    <div style="margin-top:8px;">
-                        <span style="font-size:11px; font-weight:700; color:#15803d;">CÂU LỜI NÓI DỊCH ĐƯỢC:</span>
-                        <div id="hybridSpokenDisplay" style="font-size:18px; font-weight:800; color:#15803d; margin-top:4px;"></div>
-                    </div>
-
-                    <div style="display:flex; gap:8px; margin-top:10px;">
-                        <button class="btn-primary btn-success" style="width:auto; padding:6px 14px;" onclick="speakText(document.getElementById('hybridSpokenDisplay').innerText)">
-                            🔊 Phát âm thanh (TTS)
-                        </button>
-                    </div>
-
-                    <div style="margin-top:12px; border-top:1px dashed #bfdbfe; padding-top:8px;">
-                        <span style="font-size:11px; font-weight:700; color:var(--muted);">THẺ GỢI Ý XÁC NHẬN (SUGGESTED CHIPS):</span>
-                        <div id="hybridSuggestedChips" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:6px;"></div>
-                    </div>
+            <div id="hybridResultBox" style="display:none; margin-top:10px;">
+                <div style="background:#eff6ff; border:1.5px solid #bfdbfe; border-radius:var(--radius); padding:12px;">
+                    <span id="hybridResultBadge" class="sla-pill">Đủ tin cậy</span>
+                    <div id="hybridSpokenDisplay" style="font-size:15px; font-weight:800; color:#15803d; margin-top:6px;"></div>
+                    <button class="btn-action btn-green" style="width:auto; padding:5px 12px; margin-top:8px;" onclick="speakText(document.getElementById('hybridSpokenDisplay').innerText)">
+                        🔊 Nghe
+                    </button>
+                    <div id="hybridSuggestedChips" style="display:flex; gap:4px; flex-wrap:wrap; margin-top:8px;"></div>
                 </div>
             </div>
         </div>
@@ -931,16 +672,37 @@ const ICON_MAP = {
     "CHECK": "✅", "WARNING": "⚠️", "INFO": "ℹ️"
 };
 
+// View Mode (Default: App Mode)
+let currentViewMode = localStorage.getItem('signbridge_view_mode') || 'app';
+function applyViewMode() {
+    const wrapper = document.getElementById('appWrapper');
+    const btn = document.getElementById('btnToggleSim');
+    if (currentViewMode === 'desktop') {
+        wrapper.classList.remove('app-mode');
+        wrapper.classList.add('desktop-mode');
+        btn.innerText = '📱 App';
+    } else {
+        wrapper.classList.remove('desktop-mode');
+        wrapper.classList.add('app-mode');
+        btn.innerText = '🖥️ Desktop';
+    }
+}
+function toggleViewMode() {
+    currentViewMode = currentViewMode === 'app' ? 'desktop' : 'app';
+    localStorage.setItem('signbridge_view_mode', currentViewMode);
+    applyViewMode();
+}
+
 // Multi-Tenancy User ID
 let currentUserId = localStorage.getItem('signbridge_user_id');
 if (!currentUserId) {
-    currentUserId = 'user_' + Math.random().toString(36).substring(2, 9);
+    currentUserId = 'user_' + Math.random().toString(36).substring(2, 8);
     localStorage.setItem('signbridge_user_id', currentUserId);
 }
 document.getElementById('userIdDisplay').innerText = currentUserId;
 
 function promptChangeUserId() {
-    const newId = prompt("Nhập User ID mới (để kiểm tra cơ chế phân lập dữ liệu người dùng):", currentUserId);
+    const newId = prompt("Nhập User ID mới:", currentUserId);
     if (newId && newId.trim()) {
         currentUserId = newId.trim();
         localStorage.setItem('signbridge_user_id', currentUserId);
@@ -949,72 +711,50 @@ function promptChangeUserId() {
     }
 }
 
-// Mobile Simulator Toggle
-function toggleMobileSimulator() {
-    const wrapper = document.getElementById('appWrapper');
-    const btn = document.getElementById('btnToggleSim');
-    wrapper.classList.toggle('mobile-sim-mode');
-    btn.classList.toggle('active');
-    if (wrapper.classList.contains('mobile-sim-mode')) {
-        btn.innerHTML = '<span>🖥️ Chế độ Desktop</span>';
-    } else {
-        btn.innerHTML = '<span>📱 Mô phỏng Điện thoại</span>';
-    }
-}
-
-// Check Backend Health
+// Health Check
 async function checkSystemHealth() {
     try {
         const res = await fetch('/api/health');
         if (res.ok) {
             const data = await res.json();
-            document.getElementById('dotServer').className = 'health-dot online';
-            document.getElementById('dotWhisper').className = data.whisper_loaded ? 'health-dot online' : 'health-dot online';
-            document.getElementById('lblWhisper').innerText = data.whisper_loaded ? 'In-Memory' : 'Lazy-Load';
-            document.getElementById('dotDb').className = data.db_connected ? 'health-dot online' : 'health-dot offline';
-            document.getElementById('lblDb').innerText = data.db_connected ? 'PostgreSQL' : 'Offline';
-            document.getElementById('dotVsl').className = data.vsl_labels > 0 ? 'health-dot online' : 'health-dot offline';
-            document.getElementById('lblVsl').innerText = data.vsl_labels > 0 ? `${data.vsl_labels} nhãn` : 'Chưa có file';
-            document.getElementById('dotLlm').className = data.llm_configured ? 'health-dot online' : 'health-dot offline';
-            document.getElementById('lblLlm').innerText = data.llm_configured ? (data.llm_model || 'Active') : 'Chưa set KEY';
+            document.getElementById('dotServer').className = 'dot ok';
+            document.getElementById('dotWhisper').className = data.whisper_loaded ? 'dot ok' : 'dot ok';
+            document.getElementById('dotDb').className = data.db_connected ? 'dot ok' : 'dot err';
+            document.getElementById('dotVsl').className = data.vsl_labels > 0 ? 'dot ok' : 'dot err';
+            document.getElementById('dotLlm').className = data.llm_configured ? 'dot ok' : 'dot err';
         }
     } catch (e) {
-        document.getElementById('dotServer').className = 'health-dot offline';
-        document.getElementById('lblServer').innerText = 'Offline';
+        document.getElementById('dotServer').className = 'dot err';
     }
 }
 
-// 1-Click Preset Scenarios
+// Quick Presets
 function applyPreset(ctx, staffText, prevOut) {
     document.getElementById('contextSelect').value = ctx;
     document.getElementById('prevOutgoing').value = prevOut || '';
     document.getElementById('directTextInput').value = staffText;
-    
-    // Đổi sang tab tóm tắt và kích hoạt chế độ text nhanh
     switchTab('summarize');
     switchAudioSubmode('text');
     onContextChange();
+    submitDirectText();
 }
 
-// Main Tabs Switching
+// Tabs
 function switchTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-page').forEach(p => p.style.display = 'none');
-    
+    document.querySelectorAll('.tab-item').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-view').forEach(p => p.style.display = 'none');
     const tabMap = {
         'summarize': { idx: 0, id: 'tab-summarize' },
         'expand': { idx: 1, id: 'tab-expand' },
         'camera': { idx: 2, id: 'tab-camera' },
         'hybrid': { idx: 3, id: 'tab-hybrid' }
     };
-
     if (tabMap[tabName]) {
-        document.querySelectorAll('.tab-btn')[tabMap[tabName].idx].classList.add('active');
+        document.querySelectorAll('.tab-item')[tabMap[tabName].idx].classList.add('active');
         document.getElementById(tabMap[tabName].id).style.display = 'block';
     }
 }
 
-// Audio Input Sub-modes
 function switchAudioSubmode(mode) {
     ['mic', 'upload', 'text'].forEach(m => {
         document.getElementById('btnSub' + m.charAt(0).toUpperCase() + m.slice(1)).classList.remove('active');
@@ -1024,17 +764,9 @@ function switchAudioSubmode(mode) {
     document.getElementById('submode-' + mode).style.display = 'block';
 }
 
-// Live Mic Recording & Audio Waveform Visualizer
-let mediaRecorder;
-let audioChunks = [];
-let recordedBlob = null;
-let isRecording = false;
-let recordTimerInterval = null;
-let recordSeconds = 0;
+// Audio Recording
+let mediaRecorder, audioChunks = [], recordedBlob = null, isRecording = false, recordTimer = null, recordSecs = 0;
 let lastRecentTranscript = "";
-let audioCtx = null;
-let analyser = null;
-let animFrameId = null;
 
 async function toggleRecord() {
     if (!isRecording) {
@@ -1050,77 +782,35 @@ async function toggleRecord() {
                 const player = document.getElementById('audioPlayback');
                 player.src = URL.createObjectURL(recordedBlob);
                 player.style.display = 'block';
-                document.getElementById('submitMicBtn').style.display = 'block';
+                document.getElementById('submitMicBtn').style.display = 'flex';
             };
-
-            // Audio Visualizer
-            try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioCtx.createAnalyser();
-                const source = audioCtx.createMediaStreamSource(stream);
-                source.connect(analyser);
-                analyser.fftSize = 64;
-                startVisualizer();
-            } catch (e) { console.log('Visualizer không khả dụng', e); }
-
             mediaRecorder.start();
             isRecording = true;
             document.getElementById('micBtn').classList.add('recording');
-            document.getElementById('micLabel').innerText = "Đang thu âm giọng nói... Bấm lại để dừng";
-            
-            recordSeconds = 0;
-            const timerEl = document.getElementById('recordTime');
-            timerEl.style.display = 'block';
-            timerEl.innerText = "00:00";
-            recordTimerInterval = setInterval(() => {
-                recordSeconds++;
-                const mins = String(Math.floor(recordSeconds / 60)).padStart(2, '0');
-                const secs = String(recordSeconds % 60).padStart(2, '0');
-                timerEl.innerText = `${mins}:${secs}`;
+            document.getElementById('micLabel').innerText = "Đang thu... Chạm để dừng";
+            recordSecs = 0;
+            const tEl = document.getElementById('recordTime');
+            tEl.style.display = 'block';
+            tEl.innerText = "00:00";
+            recordTimer = setInterval(() => {
+                recordSecs++;
+                tEl.innerText = String(Math.floor(recordSecs/60)).padStart(2,'0') + ':' + String(recordSecs%60).padStart(2,'0');
             }, 1000);
-        } catch (err) {
-            alert("Không thể truy cập Microphone: " + err.message);
-        }
+        } catch (err) { alert("Không thể mở Micro: " + err.message); }
     } else {
         mediaRecorder.stop();
         mediaRecorder.stream.getTracks().forEach(t => t.stop());
         isRecording = false;
-        clearInterval(recordTimerInterval);
-        if (animFrameId) cancelAnimationFrame(animFrameId);
-        document.getElementById('audioVisualizer').style.display = 'none';
+        clearInterval(recordTimer);
         document.getElementById('micBtn').classList.remove('recording');
-        document.getElementById('micLabel').innerText = "Đã thu xong! Bấm nút bên dưới để phiên âm & tóm tắt.";
+        document.getElementById('micLabel').innerText = "Đã thu xong. Bấm 'Tóm tắt' bên dưới";
     }
-}
-
-function startVisualizer() {
-    const canvas = document.getElementById('audioVisualizer');
-    canvas.style.display = 'block';
-    const ctx = canvas.getContext('2d');
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    function draw() {
-        animFrameId = requestAnimationFrame(draw);
-        analyser.getByteFrequencyData(dataArray);
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const barWidth = (canvas.width / bufferLength) * 1.5;
-        let x = 0;
-        for (let i = 0; i < bufferLength; i++) {
-            const barHeight = (dataArray[i] / 255) * canvas.height;
-            ctx.fillStyle = '#2563eb';
-            ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
-            x += barWidth;
-        }
-    }
-    draw();
 }
 
 function handleFilePicked(input) {
     if (input.files && input.files[0]) {
         const file = input.files[0];
-        document.getElementById('fileNameDisplay').innerText = "Đã chọn: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)";
+        document.getElementById('fileNameDisplay').innerText = file.name + " (" + (file.size/1024).toFixed(0) + " KB)";
         document.getElementById('submitFileBtn').disabled = false;
     }
 }
@@ -1130,7 +820,6 @@ function submitFileAudio() {
     if (file) submitAudioData(file, file.name);
 }
 
-// Gửi âm thanh tới /api/summarize
 async function submitAudioData(blobOrFile, fileName) {
     const loading = document.getElementById('summarizeLoading');
     const resultBox = document.getElementById('deafResultBox');
@@ -1152,25 +841,17 @@ async function submitAudioData(blobOrFile, fileName) {
         });
         const data = await res.json();
         loading.style.display = 'none';
-
-        if (res.ok) {
-            renderSummarizeResult(data, (performance.now() - t0) / 1000);
-        } else {
-            alert("Lỗi xử lý: " + ((data.error && data.error.message) || "Không thể phiên âm"));
-        }
+        if (res.ok) renderSummarizeResult(data, (performance.now() - t0)/1000);
+        else alert("Lỗi: " + ((data.error && data.error.message) || "Không thể xử lý"));
     } catch (e) {
         loading.style.display = 'none';
         alert("Lỗi kết nối: " + e.message);
     }
 }
 
-// Gửi văn bản trực tiếp tới /api/v1/ai/summarize (Test nhanh)
 async function submitDirectText() {
     const text = document.getElementById('directTextInput').value.trim();
-    if (!text) {
-        alert("Vui lòng nhập văn bản lời nói nhân viên.");
-        return;
-    }
+    if (!text) return;
     const loading = document.getElementById('summarizeLoading');
     const resultBox = document.getElementById('deafResultBox');
     loading.style.display = 'block';
@@ -1180,10 +861,7 @@ async function submitDirectText() {
         const t0 = performance.now();
         const res = await fetch('/api/v1/ai/summarize', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-User-Id': currentUserId
-            },
+            headers: { 'Content-Type': 'application/json', 'X-User-Id': currentUserId },
             body: JSON.stringify({
                 transcript: text,
                 context: document.getElementById('contextSelect').value,
@@ -1192,12 +870,8 @@ async function submitDirectText() {
         });
         const data = await res.json();
         loading.style.display = 'none';
-
-        if (res.ok) {
-            renderSummarizeResult(data, (performance.now() - t0) / 1000);
-        } else {
-            alert("Lỗi tóm tắt: " + ((data.error && data.error.message) || "Không thể xử lý"));
-        }
+        if (res.ok) renderSummarizeResult(data, (performance.now() - t0)/1000);
+        else alert("Lỗi: " + ((data.error && data.error.message) || "Lỗi tóm tắt"));
     } catch (e) {
         loading.style.display = 'none';
         alert("Lỗi kết nối: " + e.message);
@@ -1205,54 +879,42 @@ async function submitDirectText() {
 }
 
 function renderSummarizeResult(data, localDuration) {
-    const resultBox = document.getElementById('deafResultBox');
-    resultBox.style.display = 'block';
-
+    document.getElementById('deafResultBox').style.display = 'block';
     document.getElementById('iconDisplay').innerText = ICON_MAP[data.iconCode] || 'ℹ️';
     document.getElementById('summaryDisplay').innerText = data.summary;
     document.getElementById('transcriptDisplay').innerText = `"${data.transcript}"`;
-    
-    const latencySec = (data.processing_time_ms ? (data.processing_time_ms / 1000) : localDuration).toFixed(1);
-    document.getElementById('procTimeBadge').innerText = latencySec + 's';
+    const sec = (data.processing_time_ms ? (data.processing_time_ms / 1000) : localDuration).toFixed(1);
+    document.getElementById('procTimeBadge').innerText = sec + 's';
     lastRecentTranscript = data.transcript || "";
 
-    // Highlights
     const hlBox = document.getElementById('highlightsBox');
     hlBox.innerHTML = '';
     (data.highlights || []).forEach(h => {
         const tag = document.createElement('span');
-        tag.className = 'hl-tag hl-' + (h.type || 'OTHER');
+        tag.className = 'hl-chip hl-' + (h.type || 'OTHER');
         tag.innerText = `[${h.type}] ${h.text}`;
         hlBox.appendChild(tag);
     });
 
-    // 3 Quick Replies
     const repGrid = document.getElementById('repliesGrid');
     repGrid.innerHTML = '';
     (data.quickReplies || []).forEach(r => {
-        const btn = document.createElement('button');
-        btn.className = 'quick-reply-btn';
-        btn.innerHTML = `<span>👉 ${r}</span><span style="font-size:16px;">🔊</span>`;
+        const btn = document.createElement('div');
+        btn.className = 'reply-item';
+        btn.innerHTML = `<span>👉 ${r}</span><span>🔊</span>`;
         btn.onclick = () => speakText(r);
         repGrid.appendChild(btn);
     });
 
-    // Suggested Chips
     const sChipsBox = document.getElementById('summarySuggestedChips');
     sChipsBox.innerHTML = '';
-    const suggestedChips = data.suggestedChips || [];
-    if (suggestedChips.length > 0) {
-        suggestedChips.forEach(chipText => {
-            const pill = document.createElement('span');
-            pill.className = 'ai-pill';
-            pill.innerHTML = `<span>➕ ${chipText}</span>`;
-            pill.onclick = () => selectSuggestedChipToTab2(chipText);
-            sChipsBox.appendChild(pill);
-        });
-        renderAiSuggestedChips(suggestedChips);
-    } else {
-        sChipsBox.innerHTML = '<span style="font-size:12px; color:var(--muted);">Chưa có từ khóa mới</span>';
-    }
+    (data.suggestedChips || []).forEach(chipText => {
+        const pill = document.createElement('span');
+        pill.className = 'c-tag';
+        pill.innerHTML = `<span>➕ ${chipText}</span>`;
+        pill.onclick = () => selectSuggestedChipToTab2(chipText);
+        sChipsBox.appendChild(pill);
+    });
 }
 
 function selectSuggestedChipToTab2(chipText) {
@@ -1265,7 +927,7 @@ function selectSuggestedChipToTab2(chipText) {
     switchTab('expand');
 }
 
-// ----------------- Quick Chips CRUD (Tab 2) -----------------
+// Chips CRUD
 async function loadUserChips() {
     const container = document.getElementById('presetChips');
     const ctx = document.getElementById('contextSelect').value;
@@ -1275,42 +937,35 @@ async function loadUserChips() {
         });
         const chips = await res.json();
         container.innerHTML = '';
-
         if (!chips || chips.length === 0) {
-            container.innerHTML = '<span style="color:var(--muted); font-size:12px;">Chưa có thẻ nào cho ngữ cảnh này.</span>';
+            container.innerHTML = '<span style="font-size:11px; color:var(--muted);">Chưa có thẻ.</span>';
             return;
         }
-
         const selectedSet = new Set(
             document.getElementById('customChipsInput').value.split(',').map(s => s.trim()).filter(Boolean)
         );
-
         chips.forEach(chip => {
             const span = document.createElement('span');
-            span.className = 'chip-tag' + (chip.is_system ? '' : ' custom') + (selectedSet.has(chip.text) ? ' selected' : '');
-            span.setAttribute('data-id', chip.id);
+            span.className = 'c-tag' + (chip.is_system ? '' : ' custom') + (selectedSet.has(chip.text) ? ' selected' : '');
             span.setAttribute('data-text', chip.text);
-
             let html = `<span>${chip.text}</span>`;
             if (!chip.is_system) {
-                html += `<button class="btn-edit" onclick="editCustomChip(event, '${chip.id}', '${chip.text}')" title="Sửa thẻ">✏️</button>`;
-                html += `<button class="btn-del" onclick="deleteCustomChip(event, '${chip.id}')" title="Xóa thẻ">&times;</button>`;
+                html += `<button onclick="editCustomChip(event, '${chip.id}', '${chip.text}')">✏️</button>`;
+                html += `<button onclick="deleteCustomChip(event, '${chip.id}')">&times;</button>`;
             }
             span.innerHTML = html;
             span.onclick = (e) => {
-                if (e.target.classList.contains('btn-del') || e.target.classList.contains('btn-edit')) return;
+                if (e.target.tagName === 'BUTTON') return;
                 span.classList.toggle('selected');
                 updateSelectedChipsFromUI();
             };
             container.appendChild(span);
         });
-    } catch (e) {
-        console.error("Lỗi nạp thẻ:", e);
-    }
+    } catch (e) { console.error(e); }
 }
 
 function updateSelectedChipsFromUI() {
-    const selected = Array.from(document.querySelectorAll('#presetChips .chip-tag.selected'))
+    const selected = Array.from(document.querySelectorAll('#presetChips .c-tag.selected'))
         .map(c => c.getAttribute('data-text') || c.innerText.replace('×', '').trim())
         .filter(Boolean);
     document.getElementById('customChipsInput').value = selected.join(', ');
@@ -1331,14 +986,14 @@ async function addNewChip() {
             await loadUserChips();
         } else {
             const err = await res.json();
-            alert("Lỗi: " + ((err.error && err.error.message) || "Không thể thêm thẻ"));
+            alert("Lỗi: " + ((err.error && err.error.message) || "Không thêm được"));
         }
-    } catch (e) { alert("Lỗi kết nối: " + e.message); }
+    } catch (e) { alert(e.message); }
 }
 
 async function editCustomChip(event, chipId, oldText) {
     event.stopPropagation();
-    const newText = prompt("Chỉnh sửa nội dung thẻ:", oldText);
+    const newText = prompt("Sửa thẻ:", oldText);
     if (!newText || newText.trim() === oldText.trim()) return;
     try {
         const res = await fetch(`/api/v1/chips/${chipId}`, {
@@ -1349,16 +1004,13 @@ async function editCustomChip(event, chipId, oldText) {
         if (res.ok) {
             await loadUserChips();
             updateSelectedChipsFromUI();
-        } else {
-            const err = await res.json();
-            alert("Lỗi: " + ((err.error && err.error.message) || "Không thể sửa thẻ"));
         }
-    } catch (e) { alert("Lỗi: " + e.message); }
+    } catch (e) { alert(e.message); }
 }
 
 async function deleteCustomChip(event, chipId) {
     event.stopPropagation();
-    if (!confirm("Bạn có chắc muốn xóa thẻ riêng này?")) return;
+    if (!confirm("Xóa thẻ này?")) return;
     try {
         const res = await fetch(`/api/v1/chips/${chipId}`, {
             method: 'DELETE',
@@ -1368,11 +1020,11 @@ async function deleteCustomChip(event, chipId) {
             await loadUserChips();
             updateSelectedChipsFromUI();
         }
-    } catch (e) { alert("Lỗi xóa: " + e.message); }
+    } catch (e) { alert(e.message); }
 }
 
 async function resetCustomChips() {
-    if (!confirm("Khôi phục về thẻ hệ thống mặc định? Các thẻ riêng bạn tự tạo sẽ bị xóa.")) return;
+    if (!confirm("Khôi phục thẻ mặc định?")) return;
     try {
         const res = await fetch('/api/v1/chips/reset', {
             method: 'POST',
@@ -1382,13 +1034,13 @@ async function resetCustomChips() {
             await loadUserChips();
             updateSelectedChipsFromUI();
         }
-    } catch (e) { alert("Lỗi đặt lại: " + e.message); }
+    } catch (e) { alert(e.message); }
 }
 
 async function requestAiChips() {
     const container = document.getElementById('aiSuggestedChipsContainer');
-    container.innerHTML = '<span style="font-size:12px; color:var(--primary); font-weight:700;">⏳ AI đang suy nghĩ các từ khóa thông minh...</span>';
-    const existing = Array.from(document.querySelectorAll('#presetChips .chip-tag')).map(c => c.getAttribute('data-text') || c.innerText.trim());
+    container.innerHTML = '<span style="font-size:11px; color:var(--primary);">⏳ AI đang tạo thẻ...</span>';
+    const existing = Array.from(document.querySelectorAll('#presetChips .c-tag')).map(c => c.getAttribute('data-text') || c.innerText.trim());
 
     try {
         const res = await fetch('/api/v1/ai/suggest-chips', {
@@ -1401,317 +1053,226 @@ async function requestAiChips() {
             })
         });
         const data = await res.json();
-        renderAiSuggestedChips(data.suggestedChips || []);
-    } catch (e) {
-        container.innerHTML = '<span style="font-size:12px; color:var(--danger);">Lỗi gợi ý: ' + e.message + '</span>';
-    }
+        container.innerHTML = '';
+        (data.suggestedChips || []).forEach(chipText => {
+            const pill = document.createElement('span');
+            pill.className = 'c-tag';
+            pill.innerHTML = `<span>➕ ${chipText}</span>`;
+            pill.onclick = async () => {
+                document.getElementById('newChipInput').value = chipText;
+                await addNewChip();
+                selectSuggestedChipToTab2(chipText);
+            };
+            container.appendChild(pill);
+        });
+    } catch (e) { container.innerHTML = '<span style="color:var(--danger); font-size:11px;">Lỗi gợi ý</span>'; }
 }
 
-function renderAiSuggestedChips(chips) {
-    const container = document.getElementById('aiSuggestedChipsContainer');
-    container.innerHTML = '';
-    if (!chips || chips.length === 0) {
-        container.innerHTML = '<span style="font-size:12px; color:var(--muted); font-style:italic;">Không có gợi ý mới.</span>';
-        return;
-    }
-    chips.forEach(chipText => {
-        const pill = document.createElement('span');
-        pill.className = 'ai-pill';
-        pill.innerHTML = `<span>➕ ${chipText}</span>`;
-        pill.title = "Bấm để lưu thành thẻ cá nhân và chọn luôn";
-        pill.onclick = async () => {
-            document.getElementById('newChipInput').value = chipText;
-            await addNewChip();
-            selectSuggestedChipToTab2(chipText);
-        };
-        container.appendChild(pill);
-    });
-}
-
-function onContextChange() {
-    loadUserChips();
-}
+function onContextChange() { loadUserChips(); }
 
 async function submitExpand() {
     const raw = document.getElementById('customChipsInput').value;
     const chips = raw.split(',').map(s => s.trim()).filter(Boolean);
-    if (chips.length === 0) {
-        alert("Vui lòng chọn hoặc nhập ít nhất 1 thẻ từ khóa.");
-        return;
-    }
+    if (chips.length === 0) return alert("Chọn ít nhất 1 thẻ.");
     try {
         const res = await fetch('/api/expand', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-User-Id': currentUserId },
-            body: JSON.stringify({
-                context: document.getElementById('contextSelect').value,
-                chips: chips
-            })
+            body: JSON.stringify({ context: document.getElementById('contextSelect').value, chips })
         });
         const data = await res.json();
         if (res.ok) {
             document.getElementById('expandResultBox').style.display = 'block';
             document.getElementById('spokenSentenceDisplay').innerText = data.spoken_sentence;
-        } else {
-            alert("Lỗi: " + ((data.error && data.error.message) || "Không thể mở rộng thẻ"));
-        }
-    } catch (e) { alert("Lỗi: " + e.message); }
+        } else alert("Lỗi: " + ((data.error && data.error.message) || "Không thể tạo câu"));
+    } catch (e) { alert(e.message); }
 }
 
-// ----------------- Webcam VSL Live (Tab 3) -----------------
-let webcamStream = null;
-let isCameraRunning = false;
-let currentCameraFacing = "user";
+// Camera VSL
+let webcamStream = null, isCameraRunning = false, cameraFacing = "user";
 
 async function toggleWebcam() {
     const video = document.getElementById('webcamVideo');
-    const placeholder = document.getElementById('webcamPlaceholder');
-    const guideBox = document.getElementById('handGuideBox');
-    const btnToggle = document.getElementById('btnToggleCamera');
-    const btnSwitch = document.getElementById('btnSwitchCam');
-    const btnCapture = document.getElementById('btnCaptureSign');
+    const ph = document.getElementById('webcamPlaceholder');
+    const guide = document.getElementById('handGuideBox');
+    const btnT = document.getElementById('btnToggleCamera');
+    const btnS = document.getElementById('btnSwitchCam');
+    const btnC = document.getElementById('btnCaptureSign');
 
     if (!isCameraRunning) {
         try {
             webcamStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: currentCameraFacing },
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: cameraFacing },
                 audio: false
             });
             video.srcObject = webcamStream;
             video.style.display = 'block';
-            placeholder.style.display = 'none';
-            guideBox.style.display = 'flex';
-            btnToggle.innerText = '⏹️ Tắt Camera';
-            btnToggle.style.background = 'var(--danger)';
-            btnSwitch.style.display = 'inline-flex';
-            btnCapture.disabled = false;
+            ph.style.display = 'none';
+            guide.style.display = 'flex';
+            btnT.innerText = '⏹️ Tắt Cam';
+            btnT.style.background = 'var(--danger)';
+            btnS.style.display = 'inline-flex';
+            btnC.disabled = false;
             isCameraRunning = true;
-        } catch (err) { alert('Không thể mở Camera: ' + err.message); }
+        } catch (err) { alert("Lỗi camera: " + err.message); }
     } else {
-        if (webcamStream) {
-            webcamStream.getTracks().forEach(t => t.stop());
-            webcamStream = null;
-        }
+        if (webcamStream) webcamStream.getTracks().forEach(t => t.stop());
         video.srcObject = null;
         video.style.display = 'none';
-        placeholder.style.display = 'block';
-        guideBox.style.display = 'none';
-        btnToggle.innerText = '🎥 Mở Camera';
-        btnToggle.style.background = '#64748b';
-        btnSwitch.style.display = 'none';
-        btnCapture.disabled = true;
+        ph.style.display = 'block';
+        guide.style.display = 'none';
+        btnT.innerText = '🎥 Bật Cam';
+        btnT.style.background = 'var(--secondary)';
+        btnS.style.display = 'none';
+        btnC.disabled = true;
         isCameraRunning = false;
     }
 }
 
 async function switchCameraFacing() {
-    currentCameraFacing = currentCameraFacing === "user" ? "environment" : "user";
-    if (isCameraRunning) {
-        await toggleWebcam(); // Tắt
-        await toggleWebcam(); // Bật lại với facingMode mới
-    }
+    cameraFacing = cameraFacing === "user" ? "environment" : "user";
+    if (isCameraRunning) { await toggleWebcam(); await toggleWebcam(); }
 }
 
 async function startSignCaptureSequence() {
     if (!isCameraRunning) return;
     const overlay = document.getElementById('cameraCountdownOverlay');
     const numEl = document.getElementById('countdownNumber');
-    const labelEl = document.getElementById('countdownLabel');
-    const btnCapture = document.getElementById('btnCaptureSign');
-    btnCapture.disabled = true;
+    const btnC = document.getElementById('btnCaptureSign');
+    btnC.disabled = true;
     overlay.style.display = 'flex';
 
-    // Đếm ngược 3..2..1
     for (let c = 3; c >= 1; c--) {
         numEl.innerText = c;
-        labelEl.innerText = 'Chuẩn bị thực hiện cử chỉ ký hiệu...';
-        await new Promise(r => setTimeout(r, 700));
+        await new Promise(r => setTimeout(r, 650));
     }
-
-    // Chụp 4 frame trong 1.5s
     numEl.innerText = '🔴';
-    labelEl.innerText = 'ĐANG GHI HÌNH CỬ CHỈ (1.5s)...';
 
     const video = document.getElementById('webcamVideo');
     const canvas = document.getElementById('captureCanvas');
-    canvas.width = 640;
-    canvas.height = 480;
+    canvas.width = 640; canvas.height = 480;
     const ctx = canvas.getContext('2d');
-
     const framesBlobs = [];
-    const frameThumbnails = document.getElementById('framesThumbnails');
-    frameThumbnails.innerHTML = '';
+    const thumbs = document.getElementById('framesThumbnails');
+    thumbs.innerHTML = '';
     document.getElementById('capturedFramesBox').style.display = 'block';
 
     for (let i = 0; i < 4; i++) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-        const thumb = document.createElement('img');
-        thumb.src = dataUrl;
-        thumb.style.width = '70px';
-        thumb.style.height = '52px';
-        thumb.style.objectFit = 'cover';
-        thumb.style.borderRadius = '6px';
-        thumb.style.border = '2px solid #38bdf8';
-        frameThumbnails.appendChild(thumb);
-
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.style.cssText = "width:60px; height:45px; object-fit:cover; border-radius:4px; border:1px solid #38bdf8;";
+        thumbs.appendChild(img);
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
         framesBlobs.push(blob);
         if (i < 3) await new Promise(r => setTimeout(r, 375));
     }
 
     overlay.style.display = 'none';
-    btnCapture.disabled = false;
+    btnC.disabled = false;
     await submitSignFrames(framesBlobs);
 }
 
 async function submitSignFrames(blobs) {
-    const loadingBox = document.getElementById('cameraLoadingBox');
-    const resultBox = document.getElementById('signResultBox');
-    loadingBox.style.display = 'block';
-    resultBox.style.display = 'none';
+    const loading = document.getElementById('cameraLoadingBox');
+    const box = document.getElementById('signResultBox');
+    loading.style.display = 'block';
+    box.style.display = 'none';
 
     const formData = new FormData();
-    blobs.forEach((b, idx) => {
-        formData.append('frames', b, `frame_${idx}.jpg`);
-    });
+    blobs.forEach((b, i) => formData.append('frames', b, `f_${i}.jpg`));
     formData.append('context', document.getElementById('contextSelect').value);
     const prev = document.getElementById('prevOutgoing').value.trim();
     if (prev) formData.append('previousIncoming', prev);
 
     try {
-        const res = await fetch('/api/sign', {
-            method: 'POST',
-            body: formData
-        });
+        const res = await fetch('/api/sign', { method: 'POST', body: formData });
         const data = await res.json();
-        loadingBox.style.display = 'none';
-
+        loading.style.display = 'none';
         if (res.ok) {
-            resultBox.style.display = 'block';
-            const glossesContainer = document.getElementById('signGlossesDisplay');
-            glossesContainer.innerHTML = '';
+            box.style.display = 'block';
+            const gBox = document.getElementById('signGlossesDisplay');
+            gBox.innerHTML = '';
             (data.glosses || []).forEach(g => {
-                const badge = document.createElement('span');
-                badge.className = 'latency-badge';
-                badge.innerText = g;
-                glossesContainer.appendChild(badge);
+                const b = document.createElement('span');
+                b.className = 'sla-pill';
+                b.innerText = g;
+                gBox.appendChild(b);
             });
-
             const conf = Math.round((data.confidence || 0) * 100);
-            const confBadge = document.getElementById('signConfidenceBadge');
-            confBadge.innerText = `${conf}%`;
-            confBadge.style.background = conf >= 70 ? '#dcfce7' : '#fef3c7';
-            confBadge.style.color = conf >= 70 ? '#166534' : '#92400e';
-
-            const spokenEl = document.getElementById('signSpokenSentenceDisplay');
-            spokenEl.innerText = data.spoken_sentence || '(Ký hiệu chưa rõ hoặc độ tin cậy thấp — Mời chọn thẻ bên dưới)';
-
-            const sChipsContainer = document.getElementById('signSuggestedChipsDisplay');
-            sChipsContainer.innerHTML = '';
-            (data.suggestedChips || []).forEach(chipText => {
-                const pill = document.createElement('span');
-                pill.className = 'ai-pill';
-                pill.innerHTML = `<span>➕ ${chipText}</span>`;
-                pill.onclick = () => selectSuggestedChipToTab2(chipText);
-                sChipsContainer.appendChild(pill);
-            });
-        } else {
-            alert('Lỗi nhận diện ký hiệu: ' + ((data.error && data.error.message) || 'Không thể xử lý'));
-        }
-    } catch (err) {
-        loadingBox.style.display = 'none';
-        alert('Lỗi kết nối camera AI: ' + err.message);
+            const cBadge = document.getElementById('signConfidenceBadge');
+            cBadge.innerText = `${conf}%`;
+            cBadge.style.background = conf >= 70 ? '#dcfce7' : '#fef3c7';
+            cBadge.style.color = conf >= 70 ? '#166534' : '#92400e';
+            document.getElementById('signSpokenSentenceDisplay').innerText = data.spoken_sentence || '(Ký hiệu chưa rõ — Mời chọn thẻ)';
+        } else alert("Lỗi: " + ((data.error && data.error.message) || "Không nhận diện được"));
+    } catch (e) {
+        loading.style.display = 'none';
+        alert("Lỗi: " + e.message);
     }
 }
 
 function speakSignSentence() {
-    const text = document.getElementById('signSpokenSentenceDisplay').innerText;
-    if (text && !text.startsWith('(')) speakText(text);
+    const t = document.getElementById('signSpokenSentenceDisplay').innerText;
+    if (t && !t.startsWith('(')) speakText(t);
 }
 
-// ----------------- Hybrid VSL Simulator (Tab 4) -----------------
-function addHybridGloss(gloss) {
-    const input = document.getElementById('hybridGlossesInput');
-    const parts = input.value.split(',').map(s => s.trim()).filter(Boolean);
-    parts.push(gloss);
-    input.value = parts.join(', ');
+// Hybrid VSL Simulator
+function addHybridGloss(g) {
+    const inp = document.getElementById('hybridGlossesInput');
+    const p = inp.value.split(',').map(s => s.trim()).filter(Boolean);
+    p.push(g);
+    inp.value = p.join(', ');
 }
-
-function clearHybridGlosses() {
-    document.getElementById('hybridGlossesInput').value = '';
-}
+function clearHybridGlosses() { document.getElementById('hybridGlossesInput').value = ''; }
 
 async function submitHybridGlosses() {
-    const input = document.getElementById('hybridGlossesInput').value;
-    const glosses = input.split(',').map(s => s.trim()).filter(Boolean);
-    if (glosses.length === 0) {
-        alert("Vui lòng chọn hoặc nhập ít nhất 1 ký hiệu VSL.");
-        return;
-    }
+    const inp = document.getElementById('hybridGlossesInput').value;
+    const glosses = inp.split(',').map(s => s.trim()).filter(Boolean);
+    if (!glosses.length) return alert("Chọn ít nhất 1 ký hiệu.");
     const confVal = parseFloat(document.getElementById('hybridConfRange').value);
-    const confidences = glosses.map(() => confVal);
-
     try {
         const res = await fetch('/api/sign/glosses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 context: document.getElementById('contextSelect').value,
-                glosses: glosses,
-                confidences: confidences,
+                glosses,
+                confidences: glosses.map(() => confVal),
                 previousIncoming: document.getElementById('prevOutgoing').value.trim() || null
             })
         });
         const data = await res.json();
         const box = document.getElementById('hybridResultBox');
         box.style.display = 'block';
-
         if (res.ok) {
-            const isConfident = data.confidence >= 0.7 && !data.glosses.includes('UNKNOWN');
-            document.getElementById('hybridResultBadge').innerText = isConfident ? `Độ tin cậy: ${Math.round(data.confidence*100)}% (Phát loa)` : 'Cần xác nhận thẻ';
-            document.getElementById('hybridResultBadge').style.background = isConfident ? '#dcfce7' : '#fef3c7';
-            document.getElementById('hybridResultBadge').style.color = isConfident ? '#166534' : '#92400e';
-
-            document.getElementById('hybridSpokenDisplay').innerText = data.spoken_sentence || '(Có ký hiệu UNKNOWN hoặc độ tin cậy thấp — Yêu cầu xác nhận bằng thẻ)';
-
-            const sContainer = document.getElementById('hybridSuggestedChips');
-            sContainer.innerHTML = '';
-            (data.suggestedChips || []).forEach(chipText => {
-                const pill = document.createElement('span');
-                pill.className = 'ai-pill';
-                pill.innerHTML = `<span>➕ ${chipText}</span>`;
-                pill.onclick = () => selectSuggestedChipToTab2(chipText);
-                sContainer.appendChild(pill);
-            });
-        } else {
-            alert('Lỗi: ' + ((data.error && data.error.message) || 'Không thể xử lý'));
-        }
-    } catch (e) { alert('Lỗi kết nối: ' + e.message); }
+            const ok = data.confidence >= 0.7 && !data.glosses.includes('UNKNOWN');
+            document.getElementById('hybridResultBadge').innerText = ok ? `${Math.round(data.confidence*100)}% (Phát loa)` : 'Cần thẻ xác nhận';
+            document.getElementById('hybridResultBadge').style.background = ok ? '#dcfce7' : '#fef3c7';
+            document.getElementById('hybridResultBadge').style.color = ok ? '#166534' : '#92400e';
+            document.getElementById('hybridSpokenDisplay').innerText = data.spoken_sentence || '(Có ký hiệu chưa rõ — Mời chọn thẻ)';
+        } else alert("Lỗi: " + ((data.error && data.error.message) || "Thất bại"));
+    } catch (e) { alert(e.message); }
 }
 
-// ----------------- TTS Utilities -----------------
+// TTS
 function speakText(text) {
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
         u.lang = 'vi-VN';
-        const rateEl = document.getElementById('ttsRateSelect');
-        u.rate = rateEl ? parseFloat(rateEl.value) : 1.0;
+        u.rate = 1.0;
         window.speechSynthesis.speak(u);
-    } else {
-        alert("Trình duyệt không hỗ trợ Web Speech TTS");
     }
 }
-
 function speakCurrentSentence() {
-    const text = document.getElementById('spokenSentenceDisplay').innerText;
-    speakText(text);
+    speakText(document.getElementById('spokenSentenceDisplay').innerText);
 }
 
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+    applyViewMode();
     checkSystemHealth();
     loadUserChips();
 });
