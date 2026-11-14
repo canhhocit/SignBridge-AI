@@ -111,6 +111,30 @@ Sau khi server chạy:
 ---
 
 
+### 3. Endpoint cho mobile (hợp đồng `docs/luong-xu-ly-chinh.md` §4)
+
+| Method | Path | Body |
+|---|---|---|
+| GET | `/api/health` | — |
+| POST | `/api/sign` | multipart: `context`, `frames` (4/8/12/16 file JPEG ≤ 250KB), `personalChips` (JSON array ≤ 20), `previousIncoming` (≤ 300 ký tự) |
+| POST | `/api/expand` | JSON: `{context, chips[1..5] (≤ 50 ký tự), previousIncoming}` |
+| POST | `/api/summarize` | multipart: `context`, `audio` (m4a ≤ 2MB; Web Studio thêm webm/wav/mp3/ogg), `previousOutgoing` |
+| GET/POST/DELETE | `/api/chips` (alias `/api/v1/chips`), `POST /api/chips/reset` | Thẻ hệ thống + thẻ cá nhân, người dùng xác định bằng header `X-User-Id` (hoặc `user_id`) — mở rộng, không có trong §4 |
+| POST | `/api/ai/suggest-chips` (alias `/api/v1/ai/suggest-chips`) | JSON: `{context, recentText, existingChips}` — mở rộng |
+
+Mọi lỗi trả `{"error": {"code", "message"}}` với mã theo bảng §4.0 (`INVALID_REQUEST`, `PAYLOAD_TOO_LARGE`,
+`UNSUPPORTED_MEDIA_TYPE`, `NO_SIGN_DETECTED`, `NO_SPEECH_DETECTED`, `AI_UPSTREAM_ERROR`, `AI_TIMEOUT`).
+Chưa đặt `LLM_API_KEY` → chế độ mock (gửi `personalChips=["MOCK_LOW"]` lên `/api/sign` để thử luồng confidence thấp).
+
+### 4. Chạy test
+
+```powershell
+.env\Scripts\python.exe -m pip install -r requirements-dev.txt
+.env\Scripts\python.exe -m pytest -q
+```
+
+---
+
 ## 6. Cấu hình Mô hình
 
 Mặc định server sử dụng mô hình tối ưu tiếng Việt **PhoWhisper**:

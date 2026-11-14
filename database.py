@@ -18,7 +18,11 @@ if DATABASE_URL.startswith("postgresql://"):
 
 # Tạo engine kết nối với cơ chế tự động fallback sang SQLite nếu PostgreSQL chưa sẵn sàng
 try:
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
+    if DATABASE_URL.startswith("sqlite"):
+        # FastAPI chạy endpoint sync trên threadpool → SQLite cần tắt check_same_thread
+        engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    else:
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
     # Test kết nối
     with engine.connect() as conn:
         logger.info("[+] Đã kết nối thành công tới PostgreSQL Database!")
