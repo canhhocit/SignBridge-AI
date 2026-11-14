@@ -123,7 +123,156 @@ Content-Type: application/json
 - `spoken_sentence` rỗng → hiện `glosses` + `suggestedChips` (nhãn nghi ngờ đứng đầu) cho người dùng xác nhận → `/api/expand`.
 - Mất mạng → mobile tự ghép nhãn thành câu đơn giản (giống câu dự phòng của server: `"Đau bụng, hiệu thuốc."`) để phát loa.
 
-## 8. Kết quả kiểm chứng (máy dev Windows, CPU, 2026-11-14)
+## 9. Code mẫu tích hợp Android (Kotlin Reference)
+
+Dành cho bạn dev Mobile tích hợp vào ứng dụng Android.
+
+### 9.1. Cấu hình `build.gradle.kts` (app)
+
+```kotlin
+dependencies {
+    // TensorFlow Lite Runtime (chỉ 1MB thư viện, không cần Flex Delegate)
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    
+    // Retrofit / OkHttp gọi API Server
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+}
+
+android {
+    // Không nén file tflite khi build APK
+    aaptOptions {
+        noCompress("tflite")
+    }
+}
+```
+
+### 9.2. Đặt file vào Android Project
+
+Copy 2 file sinh bởi `tools/convert_vsl_tflite.py` vào thư mục assets của app:
+* `app/src/main/assets/vsl_model.tflite` (5,5 MB)
+* `app/src/main/assets/labels.json` (2.764 nhãn)
+
+### 9.3. Class Kotlin chạy Model (`VslClassifier.kt`)
+
+```kotlin
+package com.signbridge.ai.vsl
+
+import android.content.Context
+import org.json.JSONArray
+import org.tensorflow.lite.Interpreter
+import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.channels.FileChannel
+
+class VslClassifier(private val context: Context) {
+    private var interpreter: Interpreter? = null
+    private val labels = mutableListOf<String>()
+
+    init {
+        // 1. Nạp Model TFLite
+        val assetFd = context.assets.openFd("vsl_model.tflite")
+        val inputStream = FileInputStream(assetFd.fileDescriptor)
+        val fileChannel = inputStream.channel
+        val modelByteBuffer = fileChannel.map(
+            FileChannel.MapMode.READ_ONLY, 
+            assetFd.startOffset, 
+            assetFd.declaredLength
+        )
+        val options = Interpreter.Options().apply {
+            setNumThreads(4) // Sử dụng 4 luồng CPU cho hiệu năng tối ưu
+        }
+        interpreter = Interpreter(modelByteBuffer, options)
+
+        // 2. Nạp Danh sách Nhãn labels.json
+        val jsonString = context.assets.open("labels.json").bufferedReader().use { it.readText() }
+        val jsonArray = JSONArray(jsonString)
+        for (i in 0 until jsonArray.length()) {
+            labels.add(jsonArray.getString(i))
+        }
+    }
+
+    /**
+     * Chạy nhận diện cho 1 clip cử chỉ:
+     * @param inputBuffer Mảng float 60 frames x 201 điểm [1, 60, 201]
+     * @return Pair(nhãn top-1, xác suất confidence 0.0 -> 1.0)
+     */
+    fun classifySign(inputBuffer: Array<Array<FloatArray>>): Pair<String, Float> {
+        val output = Array(1) { FloatArray(labels.size) } // Shape [1, 2764]
+        interpreter?.run(inputBuffer, output)
+
+        val probabilities = output[0]
+        var maxIdx = 0
+        var maxProb = 0f
+        for (i in probabilities.indices) {
+            if (probabilities[i] > maxProb) {
+                maxProb = probabilities[i]
+                maxIdx = i
+            }
+        }
+        val label = if (maxIdx in labels.indices) labels[maxIdx] else "UNKNOWN"
+        return Pair(label, maxProb)
+    }
+
+    fun close() {
+        interpreter?.close()
+        interpreter = null
+    }
+}
+```
+
+### 9.4. Gọi API Server ghép câu (`SignApiService.kt`)
+
+```kotlin
+data class SignGlossesRequest(
+    val context: String,                       // "CAFE", "PHARMACY", "PUBLIC", "CUSTOM"
+    val glosses: List<String>,                 // Danh sách nhãn: ["đau bụng", "hiệu thuốc"]
+    val confidences: List<Float>,              // Xác suất: [0.93, 0.81]
+    val previousIncoming: String? = null       // Câu nhân viên vừa nói (nếu có)
+)
+
+data class SignResponse(
+    val glosses: List<String>,
+    val confidence: Float,
+    val spoken_sentence: String,               // Câu hoàn chỉnh -> Gửi loa TTS phát âm
+    val suggestedChips: List<String>           // Thẻ gợi ý nếu cần xác nhận
+)
+
+interface SignApiService {
+    @POST("/api/sign/glosses")
+    suspend fun sendGlosses(@Body req: SignGlossesRequest): Response<SignResponse>
+}
+```
+
+### 9.5. Luồng xử lý giao diện phía Mobile
+
+```kotlin
+// Khi người khiếm thính quay xong 1 hoặc nhiều cử chỉ:
+val resultList = mutableListOf<Pair<String, Float>>()
+resultList.add(classifier.classifySign(clip1Landmarks)) // VD: Pair("đau bụng", 0.92f)
+resultList.add(classifier.classifySign(clip2Landmarks)) // VD: Pair("hiệu thuốc", 0.85f)
+
+// Gửi lên server
+val request = SignGlossesRequest(
+    context = currentContext,
+    glosses = resultList.map { it.first },
+    confidences = resultList.map { it.second },
+    previousIncoming = lastStaffSpeech
+)
+
+val response = apiService.sendGlosses(request).body()
+
+if (response != null) {
+    if (response.spoken_sentence.isNotBlank()) {
+        // 1. Đủ tin cậy -> Phát loa TTS tiếng Việt ngay lập tức
+        textToSpeech.speak(response.spoken_sentence, TextToSpeech.QUEUE_FLUSH, null, "tts_1")
+    } else {
+        // 2. Độ tin cậy thấp hoặc có UNKNOWN -> Hiện thẻ gợi ý cho người dùng chạm chọn
+        showSuggestedChipsDialog(response.suggestedChips)
+    }
+}
+```
 
 **Convert** — TensorFlow 2.18.1 + Keras 3.15.1, chỉ op builtin (không cần Flex / `select-tf-ops`). LSTM thành vòng `WHILE`, không phải op LSTM gộp sẵn.
 
