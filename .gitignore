@@ -26,6 +26,9 @@ whisper.cpp/
 Vietnamese-Sign-Language-Recognition/
 
 # IDE and OS files
+*.db
+*.sqlite
+*.sqlite3
 .vscode/
 .idea/
 Thumbs.db

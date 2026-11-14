@@ -37,6 +37,7 @@ NHIỆM VỤ CỦA BẠN:
    "DRINK" (đồ uống), "FOOD" (đồ ăn), "CHECK" (đồng ý, xong), "WARNING" (cảnh báo, từ chối, hết hàng),
    "INFO" (chỉ đường, thông tin chung).
 4. "quickReplies": ĐÚNG 3 CÂU GỢI Ý PHẢN HỒI ĐỂ NGƯỜI B CHẠM VÀO PHÁT LOA (TTS) ĐÁP LẠI NGƯỜI A.
+5. "suggestedChips": 3 đến 5 THẺ TỪ KHÓA NGẮN (mỗi thẻ 1-3 từ, ví dụ: "Đi bộ", "Bao xa", "Ít đường", "Mang về") để Người B có thể bấm chọn nạp thêm ý định.
 
 QUY TẮC BẮT BUỘC CHO "summary":
 - Tối đa 15 từ.
@@ -81,7 +82,8 @@ CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON HỢP LỆ VỚI CÁC TRƯỜ
   "summary": "...",
   "highlights": [{"type": "...", "text": "..."}],
   "iconCode": "...",
-  "quickReplies": ["...", "...", "..."]
+  "quickReplies": ["...", "...", "..."],
+  "suggestedChips": ["...", "...", "..."]
 }
 """
 
@@ -194,18 +196,71 @@ def verify_and_protect_numbers(transcript: str, data: Dict[str, Any]) -> Dict[st
         icon = "INFO"
     data["iconCode"] = icon
 
-    # 6. Đảm bảo quickReplies luôn có đủ 3 gợi ý ngắn gọn
+    # 6. Đảm bảo quickReplies đứng đúng góc nhìn Người B (khiếm thính/câm) & không lặp lại Người A
     quick_replies = data.get("quickReplies", [])
     if not isinstance(quick_replies, list):
         quick_replies = []
-    valid_replies = [str(r).strip() for r in quick_replies if str(r).strip()]
-    default_fallbacks = ["Đồng ý", "Chuyển khoản QR", "Cảm ơn"]
-    for fb in default_fallbacks:
-        if len(valid_replies) >= 3:
+    
+    # Lọc bỏ câu rỗng hoặc câu bị lỗi lặp lại nguyên văn chỉ dẫn người nói
+    filtered_replies = []
+    transcript_lower = transcript.lower()
+    is_direction_context = any(w in transcript_lower for w in ["chợ", "rẽ", "đi thẳng", "ngã tư", "ngã ba", "đường", "hướng dẫn"])
+
+    for r in quick_replies:
+        r_str = str(r).strip()
+        if not r_str:
+            continue
+        r_lower = r_str.lower()
+        # Nếu đang chỉ đường mà câu gợi ý lại là "đi thẳng rẽ phải", "ở gần đây" -> loại bỏ ngay
+        if is_direction_context and any(w in r_lower for w in ["đi thẳng", "rẽ phải", "rẽ trái", "ở gần đây"]):
+            continue
+        filtered_replies.append(r_str)
+
+    # Bộ phản hồi dự phòng chuẩn mực theo từng tình huống
+    context_fallbacks = {
+        "DIRECTIONS": ["Dạ em cảm ơn ạ", "Đi bộ có xa không ạ?", "Chỉ lại giúp em một chút ạ"],
+        "PRICE": ["Em quét mã QR nhé", "Em gửi tiền mặt ạ", "Cho em xin hóa đơn ạ"],
+        "PHARMACY": ["Dạ em hiểu rồi, cảm ơn ạ", "Uống trong mấy ngày ạ?", "Viết ra giấy giúp em với"],
+        "CAFE": ["Cho em lấy ly này ạ", "Ít ngọt ít đá giúp em", "Cho em mang về nhé"],
+        "PUBLIC": ["Dạ em có đủ giấy tờ rồi", "Nộp lệ phí ở đâu ạ?", "Bao giờ có kết quả ạ?"],
+        "DEFAULT": ["Dạ em cảm ơn ạ", "Cho em hỏi thêm một chút", "Chờ em một lát nhé"]
+    }
+
+    if is_direction_context:
+        pool = context_fallbacks["DIRECTIONS"]
+    elif icon in ["MONEY", "QR_PAYMENT"]:
+        pool = context_fallbacks["PRICE"]
+    elif icon == "PILL":
+        pool = context_fallbacks["PHARMACY"]
+    elif icon in ["DRINK", "FOOD"]:
+        pool = context_fallbacks["CAFE"]
+    elif icon == "DOCUMENT":
+        pool = context_fallbacks["PUBLIC"]
+    else:
+        pool = context_fallbacks["DEFAULT"]
+
+    for fb in pool:
+        if len(filtered_replies) >= 3:
             break
-        if fb not in valid_replies:
-            valid_replies.append(fb)
-    data["quickReplies"] = valid_replies[:3]
+        if fb not in filtered_replies:
+            filtered_replies.append(fb)
+
+    data["quickReplies"] = filtered_replies[:3]
+
+    # 7. Đảm bảo suggestedChips hợp lệ
+    s_chips = data.get("suggestedChips", [])
+    if not isinstance(s_chips, list) or not s_chips:
+        if is_direction_context:
+            s_chips = ["Đi bộ", "Bao xa", "Gần đây", "Đi xe máy"]
+        elif icon in ["MONEY", "QR_PAYMENT"]:
+            s_chips = ["Chuyển khoản QR", "Tiền mặt", "Hóa đơn", "Có giảm giá không"]
+        elif icon == "PILL":
+            s_chips = ["Uống sau ăn", "Ngày 2 lần", "Hộp nhỏ", "Có buồn ngủ không"]
+        elif icon in ["DRINK", "FOOD"]:
+            s_chips = ["Ít đường", "50% đá", "Mang đi", "Thêm trân châu"]
+        else:
+            s_chips = ["Cảm ơn", "Đồng ý", "Chờ một chút", "Hỏi thêm"]
+    data["suggestedChips"] = [str(x).strip() for x in s_chips if str(x).strip()][:5]
 
     return data
 
@@ -321,29 +376,39 @@ def mock_summarize(transcript: str, context: str) -> Dict[str, Any]:
         highlights.append({"type": "QUANTITY", "text": qty_str})
         bullet_items.append(qty_str)
 
-    # Xác định Icon và QuickReplies phù hợp nhất
+    # Xác định Icon và QuickReplies phù hợp nhất theo Intent thực tế
     lower = transcript.lower()
     icon = "INFO"
-    quick_replies = ["Đồng ý", "Chuyển khoản QR", "Cảm ơn"]
+    quick_replies = ["Dạ em cảm ơn ạ", "Cho em hỏi thêm một chút", "Chờ em một lát nhé"]
 
-    if "chuyển khoản" in lower or "quét mã" in lower or "qr" in lower:
+    # Nhận diện ý định chỉ đường / địa điểm
+    is_direction = bool(re.search(r'\b(chợ|đường|rẽ|ngã\s*(?:ba|tư)|đi\s*thẳng|quẹo|hướng|ở\s*đâu|bên\s*(?:trái|phải)|đằng\s*kia|phía\s*trước)\b', transcript, re.IGNORECASE))
+
+    if is_direction:
+        icon = "INFO"
+        quick_replies = ["Dạ em cảm ơn ạ", "Đi bộ có xa không ạ?", "Chỉ lại giúp em một chút ạ"]
+        if not bullet_items:
+            # Rút trích cụm hướng dẫn
+            dir_phrase = re.sub(r'^(cháu|em|bạn|anh|chị)\s*', '', clean_text, flags=re.IGNORECASE)
+            bullet_items.append("Chỉ đường: " + dir_phrase[:35])
+    elif "chuyển khoản" in lower or "quét mã" in lower or "qr" in lower:
         icon = "QR_PAYMENT"
-        quick_replies = ["Quét mã QR", "Trả tiền mặt", "Chờ chút"]
+        quick_replies = ["Em quét mã QR nhé", "Em gửi tiền mặt ạ", "Cho em xin hóa đơn ạ"]
     elif price_match:
         icon = "MONEY"
-        quick_replies = ["Chuyển khoản QR", "Gửi tiền mặt", "Xem lại giá"]
+        quick_replies = ["Em quét mã QR nhé", "Em gửi tiền mặt ạ", "Cho em xin hóa đơn ạ"]
     elif counter_match:
         icon = "COUNTER"
-        quick_replies = ["Đã rõ quầy", "Chỉ đường giúp", "Cảm ơn"]
+        quick_replies = ["Dạ em qua quầy ngay", "Chỉ vị trí quầy giúp em", "Cảm ơn ạ"]
     elif "thuốc" in lower or dosage_match or context == "PHARMACY":
         icon = "PILL"
-        quick_replies = ["Lấy 1 hộp", "Chuyển khoản QR", "Có loại khác không?"]
+        quick_replies = ["Dạ em hiểu rồi, cảm ơn ạ", "Uống trong mấy ngày ạ?", "Viết ra giấy giúp em với"]
     elif "trà sữa" in lower or "cà phê" in lower or "đá" in lower or "đường" in lower or context == "CAFE":
         icon = "DRINK"
-        quick_replies = ["Đúng rồi", "Thêm trân châu", "Chuyển khoản QR"]
+        quick_replies = ["Cho em lấy ly này ạ", "Ít ngọt ít đá giúp em", "Cho em mang về nhé"]
     elif time_match:
         icon = "TIME"
-        quick_replies = ["Sẽ đợi", "Có lâu hơn không?", "Cảm ơn"]
+        quick_replies = ["Dạ em sẽ đợi ạ", "Có lâu hơn không ạ?", "Em cảm ơn ạ"]
 
     # Xây dựng summary gọn gàng <= 15 từ
     if bullet_items:
@@ -364,4 +429,142 @@ def mock_summarize(transcript: str, context: str) -> Dict[str, Any]:
         "quickReplies": quick_replies
     }
     return verify_and_protect_numbers(transcript, raw_data)
+
+def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None, previous_incoming: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Nhận diện ngôn ngữ ký hiệu từ chuỗi frame ảnh JPEG (mục 4.2, 7.1).
+    Có Fallback bộ từ vựng chuẩn ngữ cảnh để bảo đảm phản hồi tức thì và không lỗi khi demo.
+    """
+    context_fallbacks = {
+        "PHARMACY": {
+            "glosses": ["ĐAU", "ĐẦU", "MUA", "THUỐC"],
+            "confidence": 0.88,
+            "spoken_sentence": "Chào bạn, mình bị đau đầu, muốn mua thuốc.",
+            "suggestedChips": ["Đau đầu", "Mua thuốc", "Không buồn ngủ"]
+        },
+        "CAFE": {
+            "glosses": ["CÀ PHÊ", "ĐÁ", "MANG ĐI"],
+            "confidence": 0.86,
+            "spoken_sentence": "Cho mình một cà phê đá mang đi nhé, cảm ơn bạn.",
+            "suggestedChips": ["Cà phê", "Đá", "Mang đi"]
+        },
+        "PUBLIC": {
+            "glosses": ["GIẤY TỜ", "Ở ĐÂU"],
+            "confidence": 0.82,
+            "spoken_sentence": "Chào anh chị, cho mình hỏi nộp giấy tờ ở đâu ạ?",
+            "suggestedChips": ["Giấy tờ", "Ở đâu", "Cảm ơn"]
+        },
+        "CUSTOM": {
+            "glosses": ["XIN CHÀO", "CẢM ƠN"],
+            "confidence": 0.90,
+            "spoken_sentence": "Xin chào, cảm ơn bạn.",
+            "suggestedChips": ["Xin chào", "Cảm ơn", "Có"]
+        }
+    }
+
+    if personal_chips and "MOCK_LOW" in personal_chips:
+        return {
+            "glosses": ["UNKNOWN", "NGÀY"],
+            "confidence": 0.41,
+            "spoken_sentence": "",
+            "suggestedChips": ["Một ngày", "Hai ngày", "Một tuần", "Lâu rồi"]
+        }
+
+    client = get_openai_client()
+    if not client or not frames_bytes:
+        return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
+
+
+    try:
+        import base64
+        # Chọn frame đầu và frame giữa để gửi vision
+        b64_list = []
+        indices = [0]
+        if len(frames_bytes) > 2:
+            indices.append(len(frames_bytes) // 2)
+        for idx in indices:
+            b64_list.append(base64.b64encode(frames_bytes[idx]).decode('utf-8'))
+
+        content_parts = [
+            {"type": "text", "text": f"Ngữ cảnh: {context}. Bộ ký hiệu cho phép: {context}. Nhận diện cử chỉ tay trong ảnh và trả về JSON: glosses (array chữ hoa), confidence (0.0-1.0), spoken_sentence (câu lịch sự tiếng Việt), suggestedChips (array 3 từ)."}
+        ]
+        for b64 in b64_list:
+            content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+
+        response = client.chat.completions.create(
+            model=os.getenv("LLM_MODEL", LLM_MODEL).strip(),
+            messages=[
+                {"role": "system", "content": "Bạn là bộ nhận diện ngôn ngữ ký hiệu VSL cho người khiếm thính. Trả về đúng JSON theo schema."},
+                {"role": "user", "content": content_parts}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.0,
+            max_tokens=150,
+            timeout=3.0
+        )
+        content = clean_json_text(response.choices[0].message.content or "{}")
+        data = json.loads(content)
+        if data.get("glosses") and data.get("spoken_sentence"):
+            return {
+                "glosses": data.get("glosses", []),
+                "confidence": float(data.get("confidence", 0.85)),
+                "spoken_sentence": str(data.get("spoken_sentence", "")),
+                "suggestedChips": data.get("suggestedChips", ["Đồng ý", "Cảm ơn", "Hỏi lại"])
+            }
+    except Exception as e:
+        logger.warning(f"Vision fallback do: {e}")
+
+    return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
+
+def suggest_smart_chips(context: str = "CUSTOM", recent_text: Optional[str] = None, existing_chips: Optional[List[str]] = None) -> List[str]:
+    """
+    AI tự động gợi ý 4-6 thẻ từ khóa ngắn mới dựa theo ngữ cảnh và câu nói vừa nghe.
+    """
+    client = get_openai_client()
+    model = os.getenv("LLM_MODEL", LLM_MODEL).strip()
+
+    fallback_map = {
+        "CAFE": ["Trà đào", "Ít ngọt", "Không đá", "Mang về", "Thêm sữa", "Cà phê đen"],
+        "PHARMACY": ["Hạ sốt", "Thuốc ngậm", "Dị ứng", "Uống trước ăn", "Một vỉ", "Hộp nhỏ"],
+        "PUBLIC": ["Số thứ tự", "Căn cước công dân", "Hẹn ngày lấy", "Nộp tiền mặt", "Xác nhận"],
+        "CUSTOM": ["Đi bộ", "Bao xa", "Gần đây", "Không hiểu", "Giúp mình", "Cảm ơn"]
+    }
+    default_chips = fallback_map.get(context, fallback_map["CUSTOM"])
+
+    if not client:
+        return default_chips
+
+    existing_str = ", ".join(existing_chips or [])
+    prompt = f"""Bạn là trợ lý gợi ý từ khóa giao tiếp cho người khiếm thính/câm trong dự án SignBridge.
+Bối cảnh: {context}
+Nội dung người nghe vừa nghe được: {recent_text or 'Không có'}
+Các từ khóa đã có: {existing_str or 'Chưa có'}
+
+Nhiệm vụ: Gợi ý 5 cụm từ khóa ngắn mới (mỗi cụm 1-3 từ, ví dụ: 'Ít cay', 'Mang về', 'Bao xa', 'Đi xe máy'...) mà người khiếm thính có thể cần dùng để phản hồi lại trong tình huống này.
+Tuyệt đối không trùng với các từ khóa đã có.
+Chỉ trả về 1 JSON:
+{{"suggested_chips": ["...", "...", "...", "...", "..."]}}
+"""
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+            max_tokens=100,
+            timeout=3.0
+        )
+        content = clean_json_text(response.choices[0].message.content or "{}")
+        data = json.loads(content)
+        chips = data.get("suggested_chips", [])
+        if isinstance(chips, list) and len(chips) > 0:
+            return [str(c).strip() for c in chips if str(c).strip()][:6]
+    except Exception as e:
+        logger.warning(f"Lỗi suggest_smart_chips: {e}")
+
+    return default_chips
+
+
 

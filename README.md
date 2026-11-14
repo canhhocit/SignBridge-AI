@@ -6,12 +6,14 @@ Dịch vụ AI Microservice cho dự án giao tiếp hai chiều **SignBridge** 
 
 ## 1. Giới thiệu & Vai trò kiến trúc
 
-Hệ thống SignBridge bao gồm 3 thành phần chính:
+Hệ thống SignBridge bao gồm 2 thành phần chính:
 - **Mobile Client (React Native / Expo):** Ứng dụng di động dành cho người khiếm thính và nhân viên thu ngân/phục vụ.
-- **Backend Chính (Spring Boot):** Đóng vai trò API Gateway & Business Orchestrator (quản lý người dùng, phân quyền JWT, lưu trữ lịch sử, CSDL quan hệ, điều phối gọi AI Service).
-- **AI Service (FastAPI - Repo này):** Chuyên trách các tác vụ suy luận AI nặng (Inference engine):
+- **SignBridge Unified AI Backend (FastAPI - Repo này):** Đóng vai trò Backend hợp nhất kiêm AI Inference Engine & Database:
   - **Speech-to-Text (STT):** Nhận diện giọng nói tiếng Việt độ chính xác cao bằng mô hình **PhoWhisper** chạy qua **CTranslate2** (`faster-whisper`), tối ưu CPU với lượng tử hóa `int8`.
-  - **VSL / Vision:** Xử lý khung hình ngôn ngữ ký hiệu (Vietnamese Sign Language) từ camera.
+  - **Tóm tắt & Gợi ý phản hồi:** Tóm tắt lời nói ≤ 15 từ, Zero-Number-Error Guardrail, 3 câu trả lời nhanh cho người khiếm thính.
+  - **Mở rộng thẻ từ khóa:** Chuyển thẻ ký hiệu thành câu phát âm thanh lịch sự.
+  - **VSL / Vision:** Nhận diện khung hình ngôn ngữ ký hiệu (Vietnamese Sign Language) từ camera.
+  - **CSDL Thẻ từ khóa (Quick Chips):** Quản lý thẻ hệ thống và thẻ cá nhân người dùng (PostgreSQL / SQLite fallback).
 
 ---
 
