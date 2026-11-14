@@ -479,15 +479,26 @@ def mock_summarize(transcript: str, context: str) -> Dict[str, Any]:
     return verify_and_protect_numbers(transcript, raw_data)
 
 SIGN_SYSTEM_PROMPT = """Bạn là bộ nhận diện ngôn ngữ ký hiệu cho người khiếm thính.
-Đầu vào là chuỗi khung hình liên tiếp, 4 khung hình mỗi 1,5 giây.
+Đầu vào là chuỗi khung hình liên tiếp từ camera.
 
 QUY TẮC BẮT BUỘC:
 1. Chỉ được trả "glosses" là chuỗi GIỐNG HỆT một mục trong DANH_SÁCH_KÝ_HIỆU, hoặc "UNKNOWN".
    Không dùng từ đồng nghĩa, không đổi chữ, không thêm từ ngoài danh sách.
 2. Không chắc một ký hiệu → "UNKNOWN". Không đoán.
 3. Nếu có bất kỳ "UNKNOWN" → "spoken_sentence" = "" và "confidence" < 0.7.
-4. "spoken_sentence" chỉ diễn đạt đúng nghĩa các glosses. Được thêm lời chào, kính ngữ, từ nối.
-   KHÔNG thêm triệu chứng, món, số lượng, giá, thời gian, tên sản phẩm hay yêu cầu không có trong glosses.
+4. "spoken_sentence":
+   - Phải là một CÂU NÓI TIẾNG VIỆT HOÀN CHỈNH, TỰ NHIÊN, LỊCH SỰ (tối đa 40 từ) để phát qua loa cho nhân viên quầy nghe.
+   - TUYỆT ĐỐI KHÔNG để câu cộc lốc chỉ 1 từ (như "Đầu.", "Thuốc."). Khi gặp từ đơn, phải thêm lời chào, kính ngữ (dạ, em, anh/chị, mình), trợ từ (ạ, nhé, giúp mình) phù hợp với ngữ cảnh:
+     + Gặp ["ĐẦU"] trong ngữ cảnh Y tế/Thuốc: "Dạ em muốn hỏi về phần đầu của em ạ." hoặc "Dạ ở phần đầu của em ạ, nhờ anh/chị xem giúp."
+     + Gặp ["BỤNG"] trong ngữ cảnh Y tế: "Dạ em muốn hỏi về phần bụng của em ạ."
+     + Gặp ["THUỐC"]: "Dạ em muốn hỏi mua thuốc ạ."
+     + Gặp ["CÀ PHÊ"] trong quán Cafe: "Cho mình một cà phê nhé ạ, cảm ơn bạn."
+     + Gặp ["XIN CHÀO"]: "Dạ em chào anh/chị ạ."
+     + Gặp ["CẢM ƠN"]: "Dạ em cảm ơn anh/chị nhiều ạ."
+     + Gặp ["THANH TOÁN"]: "Dạ cho em thanh toán với ạ."
+     + Gặp ["BAO NHIÊU"]: "Dạ món này hết bao nhiêu tiền vậy ạ?"
+   - Nếu có CÂU_NHÂN_VIÊN_VỪA_NÓI, dùng nó để tạo câu đối đáp mượt mà (ví dụ nhân viên hỏi "Bạn bị đau ở đâu?", gloss ["ĐẦU"] -> "Dạ em bị ở vùng đầu ạ").
+   - KHÔNG bịa thêm triệu chứng mới (như sốt, nôn), không bịa thêm tên thuốc hay số lượng khi không có trong glosses.
 5. Chỉ trả JSON đúng schema, không giải thích:
 {"glosses": ["..."], "confidence": 0.0, "spoken_sentence": "...", "suggestedChips": ["...", "...", "..."]}
 """
@@ -591,12 +602,18 @@ GLOSS_SENTENCE_SYSTEM_PROMPT = """Bạn viết câu nói cho người khiếm th
 Đầu vào là chuỗi ký hiệu (glosses) mà điện thoại đã nhận diện, đúng thứ tự người dùng ký.
 
 QUY TẮC BẮT BUỘC:
-1. "spoken_sentence" chỉ diễn đạt đúng nghĩa các glosses, giữ thứ tự ý. Tối đa 40 từ.
-2. Được thêm: lời chào, cảm ơn, kính ngữ (anh/chị/bạn/mình), từ nối, trợ từ (nhé, ạ, giúp mình), sắp lại trật tự cho đúng ngữ pháp.
-3. KHÔNG thêm triệu chứng, món, giấy tờ, số lượng, giá, thời gian, tên sản phẩm hay yêu cầu không có trong glosses.
-   Không đổi nghĩa, không làm mạnh/nhẹ ý người dùng.
-4. Dùng CÂU_NHÂN_VIÊN_VỪA_NÓI để câu trả lời đúng mạch. Dùng THẺ_CÁ_NHÂN chỉ khi liên quan trực tiếp đến glosses.
-5. Chỉ trả JSON: {"spoken_sentence": "..."}
+1. "spoken_sentence" phải là một CÂU NÓI TIẾNG VIỆT HOÀN CHỈNH, LỊCH SỰ, TỰ NHIÊN (tối đa 40 từ) để phát qua loa cho người nghe.
+   - TUYỆT ĐỐI KHÔNG để câu cộc lốc chỉ 1 từ (như "Đầu.", "Thuốc.").
+   - Thêm lời chào, kính ngữ (dạ, em, anh/chị, mình), từ nối, trợ từ (ạ, nhé, giúp mình) cho tự nhiên, lễ phép:
+     + Ví dụ ["ĐẦU"]: "Dạ em muốn nói về phần đầu của em ạ."
+     + Ví dụ ["BỤNG"]: "Dạ em muốn hỏi về phần bụng của em ạ."
+     + Ví dụ ["THUỐC"]: "Dạ em muốn hỏi mua thuốc ạ."
+     + Ví dụ ["CÀ PHÊ"]: "Cho mình một cà phê nhé ạ, cảm ơn bạn."
+     + Ví dụ ["THANH TOÁN"]: "Dạ cho em thanh toán với ạ."
+     + Ví dụ ["BAO NHIÊU"]: "Dạ món này hết bao nhiêu tiền vậy ạ?"
+2. Dùng CÂU_NHÂN_VIÊN_VỪA_NÓI để tạo câu đối đáp đúng mạch (nếu nhân viên vừa hỏi câu hỏi liên quan).
+3. KHÔNG bịa thêm triệu chứng, món, số lượng, giá khi không có trong glosses.
+4. Chỉ trả JSON: {"spoken_sentence": "..."}
 """
 
 
