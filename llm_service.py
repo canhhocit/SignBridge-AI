@@ -544,10 +544,15 @@ def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_
         return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
 
     import base64
-    # Chọn frame đầu và frame giữa để gửi vision (giảm độ trễ)
-    indices = [0]
-    if len(frames_bytes) > 2:
-        indices.append(len(frames_bytes) // 2)
+    # Gửi toàn bộ 4 frame để Vision AI bắt trọn diễn biến cử chỉ liên tục từ đầu đến cuối
+    if len(frames_bytes) <= 4:
+        indices = list(range(len(frames_bytes)))
+    else:
+        # Nếu gửi 8 hoặc 16 frames, chọn đều 4-6 mốc thời gian đại diện
+        step = len(frames_bytes) / 4.0
+        indices = [int(i * step) for i in range(4)]
+        if (len(frames_bytes) - 1) not in indices:
+            indices.append(len(frames_bytes) - 1)
 
     text = (f"DANH_SÁCH_KÝ_HIỆU: {json.dumps(allowed_glosses or [], ensure_ascii=False)}\n"
             f"NGỮ_CẢNH: {context}\n"

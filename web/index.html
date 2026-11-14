@@ -584,15 +584,19 @@
 
             <canvas id="captureCanvas" style="display:none;"></canvas>
 
-            <div style="display:flex; gap:6px; margin-top:10px;">
+            <div style="display:flex; gap:6px; margin-top:10px; align-items:center;">
                 <button id="btnToggleCamera" class="btn-action btn-gray" style="flex:1;" onclick="toggleWebcam()">
                     🎥 Bật Cam
                 </button>
+                <select id="cameraDurationSelect" style="padding:8px 6px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:11px; background:#fff; font-weight:700; color:var(--text); cursor:pointer;">
+                    <option value="4">4 frames (1.5s - 1 cử chỉ)</option>
+                    <option value="8" selected>8 frames (3.0s - 2 cử chỉ)</option>
+                </select>
                 <button id="btnSwitchCam" class="btn-action btn-gray" style="width:auto; display:none;" onclick="switchCameraFacing()">
                     🔄
                 </button>
-                <button id="btnCaptureSign" class="btn-action" style="flex:2;" disabled onclick="startSignCaptureSequence()">
-                    🔴 Chụp 4 frame (1.5s)
+                <button id="btnCaptureSign" class="btn-action" style="flex:1.5;" disabled onclick="startSignCaptureSequence()">
+                    🔴 Quay Cử chỉ
                 </button>
             </div>
 
@@ -1157,16 +1161,19 @@ async function startSignCaptureSequence() {
     thumbs.innerHTML = '';
     document.getElementById('capturedFramesBox').style.display = 'block';
 
-    for (let i = 0; i < 4; i++) {
+    const frameCount = parseInt(document.getElementById('cameraDurationSelect').value || '4');
+    const intervalMs = 375; // 375ms * 4 = 1.5s; 375ms * 8 = 3.0s
+
+    for (let i = 0; i < frameCount; i++) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
         const img = document.createElement('img');
         img.src = dataUrl;
-        img.style.cssText = "width:60px; height:45px; object-fit:cover; border-radius:4px; border:1px solid #38bdf8;";
+        img.style.cssText = "width:50px; height:38px; object-fit:cover; border-radius:4px; border:1px solid #38bdf8;";
         thumbs.appendChild(img);
         const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.85));
         framesBlobs.push(blob);
-        if (i < 3) await new Promise(r => setTimeout(r, 375));
+        if (i < frameCount - 1) await new Promise(r => setTimeout(r, intervalMs));
     }
 
     overlay.style.display = 'none';
