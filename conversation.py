@@ -22,10 +22,8 @@ CONFIDENCE_THRESHOLD = float(os.getenv("SIGN_CONFIDENCE_THRESHOLD", "0.7"))
 # /api/sign/glosses: xác suất softmax tối thiểu của từng ký hiệu nhận diện trên thiết bị
 VSL_MIN_GLOSS_CONFIDENCE = float(os.getenv("VSL_MIN_GLOSS_CONFIDENCE", "0.7"))
 # Nhãn của model nhận diện offline trên mobile (sinh bởi tools/convert_vsl_tflite.py)
-VSL_LABELS_PATH = os.getenv(
-    "VSL_LABELS_PATH",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "vsl", "labels.json"),
-)
+DEFAULT_VSL_LABELS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "vsl", "labels.json")
+VSL_LABELS_PATH = os.getenv("VSL_LABELS_PATH", DEFAULT_VSL_LABELS_PATH)
 MAX_SENTENCE_WORDS = 40
 MAX_SUGGESTED_CHIPS = 6
 
@@ -97,6 +95,9 @@ def _load_vsl_labels(path: str) -> Dict[str, str]:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
+        fallback_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Vietnamese-Sign-Language-Recognition", "Logs", "label_map.json")
+        if path == DEFAULT_VSL_LABELS_PATH and os.path.exists(fallback_path):
+            return _load_vsl_labels(fallback_path)
         return {}
     except (OSError, ValueError) as e:
         logger.warning("Không đọc được nhãn VSL (%s)", type(e).__name__)
