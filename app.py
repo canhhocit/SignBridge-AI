@@ -687,8 +687,9 @@ def index_page():
     </header>
 
     <div class="main-tabs">
-        <button class="main-tab-btn active" onclick="switchMainTab('summarize')">🎙️ Chiều Về: Giọng nói ➔ Tóm tắt & Gợi ý (Cho Người Khiếm Thính)</button>
-        <button class="main-tab-btn" onclick="switchMainTab('expand')">🖐️ Chiều Đi: Thẻ Ký hiệu ➔ Câu Lời Nói (Phát Loa)</button>
+        <button class="main-tab-btn active" onclick="switchMainTab('summarize')">🎙️ Chiều Về: Giọng nói ➔ Tóm tắt</button>
+        <button class="main-tab-btn" onclick="switchMainTab('expand')">🖐️ Chiều Đi: Chọn Thẻ Từ Khóa</button>
+        <button class="main-tab-btn" onclick="switchMainTab('camera')">📷 Chiều Đi: Camera Ký hiệu (VSL)</button>
     </div>
 
     <!-- TAB 1: SUMMARIZE -->
@@ -816,6 +817,73 @@ def index_page():
             </div>
         </div>
     </div>
+
+    <!-- TAB 3: CAMERA VSL -->
+    <div id="tab-camera" class="tab-content" style="display:none;">
+        <div class="card">
+            <div class="card-title">📷 Nhận diện Cử chỉ Ký hiệu qua Camera (Live Webcam VSL)</div>
+            <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Bật camera máy tính, bấm quay và giơ tay làm cử chỉ ký hiệu (VD: đau đầu, mua thuốc, cảm ơn...). Hệ thống sẽ chụp 4 frame JPEG chuẩn gửi lên AI nhận diện:</p>
+
+            <div style="text-align:center; position:relative; background:#0f172a; border-radius:12px; overflow:hidden; min-height:280px; display:flex; align-items:center; justify-content:center;">
+                <video id="webcamVideo" autoplay playsinline muted style="width:100%; max-height:360px; object-fit:cover; display:none; transform: scaleX(-1);"></video>
+                <div id="webcamPlaceholder" style="color:#94a3b8; padding:40px 20px;">
+                    <div style="font-size:48px; margin-bottom:8px;">📹</div>
+                    <div style="font-weight:600; font-size:15px;">Camera chưa được bật</div>
+                    <div style="font-size:12px; margin-top:4px;">Bấm nút "Mở Camera" bên dưới để cấp quyền</div>
+                </div>
+                <!-- Countdown Overlay -->
+                <div id="cameraCountdownOverlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.65); color:#fff; align-items:center; justify-content:center; flex-direction:column; z-index:10;">
+                    <div id="countdownNumber" style="font-size:72px; font-weight:800; color:#38bdf8;">3</div>
+                    <div id="countdownLabel" style="font-size:16px; font-weight:600; margin-top:8px;">Chuẩn bị làm cử chỉ tay...</div>
+                </div>
+            </div>
+
+            <canvas id="captureCanvas" style="display:none;"></canvas>
+
+            <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+                <button id="btnToggleCamera" class="btn-primary" style="flex:1; margin:0; background:#475569;" onclick="toggleWebcam()">🎥 Mở Camera</button>
+                <button id="btnCaptureSign" class="btn-primary" style="flex:2; margin:0;" disabled onclick="startSignCaptureSequence()">🔴 Quay Cử chỉ (Chụp 4 frames / 1.5s)</button>
+            </div>
+
+            <!-- Preview 4 Frame thumbnails -->
+            <div id="capturedFramesBox" style="display:none; margin-top:14px;">
+                <div style="font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px;">4 KHUNG HÌNH VỪA CHỤP ĐÃ GỬI LÊN AI:</div>
+                <div id="framesThumbnails" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;"></div>
+            </div>
+
+            <div id="cameraLoadingBox" style="display:none; text-align:center; padding:16px; color:var(--primary); font-weight:700;">
+                ⏳ Đang gửi 4 frames lên AI nhận diện ngôn ngữ ký hiệu... Vui lòng đợi trong giây lát!
+            </div>
+
+            <!-- Kết quả nhận diện cử chỉ -->
+            <div id="signResultBox" style="display:none; margin-top:16px;">
+                <div class="card-title">🤖 Kết quả Nhận diện Cử chỉ Ngôn ngữ Ký hiệu</div>
+                <div style="background:#eff6ff; border:2px solid #bfdbfe; border-radius:12px; padding:18px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                        <div>
+                            <span style="font-size:12px; font-weight:700; color:#1e40af;">KÝ HIỆU NHẬN DIỆN (GLOSSES):</span>
+                            <div id="signGlossesDisplay" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;"></div>
+                        </div>
+                        <span id="signConfidenceBadge" class="badge badge-green" style="font-size:13px;">90%</span>
+                    </div>
+
+                    <div style="margin-top:10px;">
+                        <span style="font-size:12px; font-weight:700; color:#15803d;">CÂU LỜI NÓI DỊCH TỪ KÝ HIỆU (ĐỂ PHÁT LOA):</span>
+                        <div id="signSpokenSentenceDisplay" style="font-size:19px; font-weight:800; color:#15803d; line-height:1.4; margin-top:4px;"></div>
+                    </div>
+
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button class="btn-primary" style="background:#16a34a; width:auto; padding:8px 16px; margin:0;" onclick="speakSignSentence()">🔊 Phát âm thanh (TTS)</button>
+                    </div>
+
+                    <div style="margin-top:14px; border-top:1px dashed #bfdbfe; padding-top:10px;">
+                        <span style="font-size:12px; font-weight:700; color:#475569;">GỢI Ý THẺ TIẾP THEO:</span>
+                        <div id="signSuggestedChipsDisplay" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -865,9 +933,184 @@ function switchMainTab(tab) {
     if (tab === 'summarize') {
         event.target.classList.add('active');
         document.getElementById('tab-summarize').style.display = 'block';
-    } else {
+    } else if (tab === 'expand') {
         event.target.classList.add('active');
         document.getElementById('tab-expand').style.display = 'block';
+    } else if (tab === 'camera') {
+        event.target.classList.add('active');
+        document.getElementById('tab-camera').style.display = 'block';
+    }
+}
+
+let webcamStream = null;
+let isCameraRunning = false;
+
+async function toggleWebcam() {
+    const video = document.getElementById('webcamVideo');
+    const placeholder = document.getElementById('webcamPlaceholder');
+    const btnToggle = document.getElementById('btnToggleCamera');
+    const btnCapture = document.getElementById('btnCaptureSign');
+
+    if (!isCameraRunning) {
+        try {
+            webcamStream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+                audio: false
+            });
+            video.srcObject = webcamStream;
+            video.style.display = 'block';
+            placeholder.style.display = 'none';
+            btnToggle.innerText = '⏹️ Tắt Camera';
+            btnToggle.style.background = '#dc2626';
+            btnCapture.disabled = false;
+            isCameraRunning = true;
+        } catch (err) {
+            alert('Không thể mở Camera: ' + err.message);
+        }
+    } else {
+        if (webcamStream) {
+            webcamStream.getTracks().forEach(t => t.stop());
+            webcamStream = null;
+        }
+        video.srcObject = null;
+        video.style.display = 'none';
+        placeholder.style.display = 'block';
+        btnToggle.innerText = '🎥 Mở Camera';
+        btnToggle.style.background = '#475569';
+        btnCapture.disabled = true;
+        isCameraRunning = false;
+    }
+}
+
+async function startSignCaptureSequence() {
+    if (!isCameraRunning) return;
+    const overlay = document.getElementById('cameraCountdownOverlay');
+    const numEl = document.getElementById('countdownNumber');
+    const labelEl = document.getElementById('countdownLabel');
+    const btnCapture = document.getElementById('btnCaptureSign');
+    btnCapture.disabled = true;
+    overlay.style.display = 'flex';
+
+    // 1. Đếm ngược 3, 2, 1
+    for (let c = 3; c >= 1; c--) {
+        numEl.innerText = c;
+        labelEl.innerText = 'Chuẩn bị thực hiện cử chỉ tay...';
+        await new Promise(r => setTimeout(r, 700));
+    }
+
+    // 2. Chụp đúng 4 frame trong 1.5 giây
+    numEl.innerText = '🔴';
+    labelEl.innerText = 'ĐANG GHI HÌNH CỬ CHỈ (1.5s)...';
+
+    const video = document.getElementById('webcamVideo');
+    const canvas = document.getElementById('captureCanvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+
+    const framesBlobs = [];
+    const frameThumbnails = document.getElementById('framesThumbnails');
+    frameThumbnails.innerHTML = '';
+    document.getElementById('capturedFramesBox').style.display = 'block';
+
+    for (let i = 0; i < 4; i++) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+        const thumb = document.createElement('img');
+        thumb.src = dataUrl;
+        thumb.style.width = '72px';
+        thumb.style.height = '54px';
+        thumb.style.objectFit = 'cover';
+        thumb.style.borderRadius = '6px';
+        thumb.style.border = '2px solid #38bdf8';
+        frameThumbnails.appendChild(thumb);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+        framesBlobs.push(blob);
+
+        if (i < 3) {
+            await new Promise(r => setTimeout(r, 375));
+        }
+    }
+
+    overlay.style.display = 'none';
+    btnCapture.disabled = false;
+
+    // 3. Gửi lên /api/sign
+    await submitSignFrames(framesBlobs);
+}
+
+async function submitSignFrames(blobs) {
+    const loadingBox = document.getElementById('cameraLoadingBox');
+    const resultBox = document.getElementById('signResultBox');
+    loadingBox.style.display = 'block';
+    resultBox.style.display = 'none';
+
+    const formData = new FormData();
+    blobs.forEach((b, idx) => {
+        formData.append('frames', b, `frame_${idx}.jpg`);
+    });
+    formData.append('context', document.getElementById('contextSelect').value);
+    const prev = document.getElementById('prevOutgoing').value.trim();
+    if (prev) formData.append('previousIncoming', prev);
+
+    try {
+        const res = await fetch('/api/sign', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        loadingBox.style.display = 'none';
+
+        if (res.ok) {
+            resultBox.style.display = 'block';
+            // Glosses
+            const glossesContainer = document.getElementById('signGlossesDisplay');
+            glossesContainer.innerHTML = '';
+            (data.glosses || []).forEach(g => {
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.style.background = '#e0e7ff';
+                badge.style.color = '#3730a3';
+                badge.style.fontSize = '14px';
+                badge.innerText = g;
+                glossesContainer.appendChild(badge);
+            });
+
+            // Confidence
+            const conf = Math.round((data.confidence || 0) * 100);
+            const confBadge = document.getElementById('signConfidenceBadge');
+            confBadge.innerText = `${conf}%`;
+            confBadge.className = conf >= 70 ? 'badge badge-green' : 'badge badge-amber';
+
+            // Spoken Sentence
+            const spokenEl = document.getElementById('signSpokenSentenceDisplay');
+            spokenEl.innerText = data.spoken_sentence || '(Độ tin cậy thấp hoặc có ký hiệu chưa rõ - Vui lòng chọn thẻ)';
+
+            // Suggested Chips
+            const sChipsContainer = document.getElementById('signSuggestedChipsDisplay');
+            sChipsContainer.innerHTML = '';
+            (data.suggestedChips || []).forEach(chipText => {
+                const pill = document.createElement('span');
+                pill.className = 'ai-chip-pill';
+                pill.innerHTML = `<span>➕ ${chipText}</span>`;
+                pill.onclick = () => selectSuggestedChipToTab2(chipText);
+                sChipsContainer.appendChild(pill);
+            });
+        } else {
+            alert('Lỗi nhận diện ký hiệu: ' + ((data.error && data.error.message) || 'Không thể xử lý'));
+        }
+    } catch (err) {
+        loadingBox.style.display = 'none';
+        alert('Lỗi kết nối camera AI: ' + err.message);
+    }
+}
+
+function speakSignSentence() {
+    const text = document.getElementById('signSpokenSentenceDisplay').innerText;
+    if (text && !text.startsWith('(')) {
+        speakText(text);
     }
 }
 
