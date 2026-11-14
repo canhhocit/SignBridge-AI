@@ -115,6 +115,7 @@ class SignResponse(BaseModel):
 class CreateChipRequest(BaseModel):
     text: str
     context: str = "CUSTOM"
+    user_id: Optional[str] = None
 
 class SuggestChipsRequest(BaseModel):
     context: str = "CUSTOM"
@@ -283,36 +284,88 @@ async def process_sign_frames(
 
 # ----------------- Quick Chips & History (CSDL) -----------------
 
+def get_current_user_id(x_user_id: Optional[str] = None, user_id: Optional[str] = None) -> str:
+    candidate = x_user_id or user_id
+    if candidate and candidate.strip():
+        return candidate.strip()
+    return "default_user"
+
+@app.get("/api/v1/chips")
 @app.get("/api/chips")
-def list_chips(user_id: str = "default_user", context: Optional[str] = None):
+def list_chips(
+    user_id: Optional[str] = None,
+    context: Optional[str] = None,
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
     """
-    Lấy danh sách thẻ từ khóa (thẻ hệ thống + thẻ cá nhân người dùng)
+    Lấy danh sách thẻ từ khóa (thẻ hệ thống + thẻ cá nhân của user_id hiện tại).
+    Đảm bảo tính đa người dùng (Multi-tenancy): người dùng A không thấy thẻ người dùng B.
     """
     if not DB_AVAILABLE:
         return []
-    return database.get_chips_for_user(user_id, context)
+    uid = get_current_user_id(x_user_id, user_id)
+    return database.get_chips_for_user(uid, context)
 
+@app.post("/api/v1/chips")
 @app.post("/api/chips")
-def create_chip(req: CreateChipRequest):
+def create_chip(
+    req: CreateChipRequest,
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
     """
-    Thêm thẻ cá nhân cho người dùng
+    Thêm thẻ cá nhân cho người dùng hiện tại
     """
     if not DB_AVAILABLE:
         raise HTTPException(status_code=503, detail="DATABASE_NOT_AVAILABLE")
+    uid = get_current_user_id(x_user_id, req.user_id)
     try:
-        return database.add_user_chip(req.user_id, req.text, req.context)
+        return database.add_user_chip(uid, req.text, req.context)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.delete("/api/v1/chips/{chip_id}")
 @app.delete("/api/chips/{chip_id}")
-def remove_chip(chip_id: str, user_id: str = "default_user"):
+def remove_chip(
+    chip_id: str,
+    user_id: Optional[str] = None,
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
     """
-    Xóa thẻ cá nhân của người dùng
+    Xóa thẻ cá nhân của người dùng hiện tại (chỉ được xóa thẻ của mình, không thể xóa thẻ hệ thống)
     """
     if not DB_AVAILABLE:
         raise HTTPException(status_code=503, detail="DATABASE_NOT_AVAILABLE")
-    ok = database.delete_user_chip(user_id, chip_id)
+    uid = get_current_user_id(x_user_id, user_id)
+    ok = database.delete_user_chip(uid, chip_id)
     return {"success": ok}
+
+@app.post("/api/v1/chips/reset")
+@app.post("/api/chips/reset")
+def reset_chips(
+    user_id: Optional[str] = None,
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id")
+):
+    """
+    Khôi phục danh sách thẻ về mặc định của hệ thống cho user_id hiện tại
+    """
+    if not DB_AVAILABLE:
+        raise HTTPException(status_code=503, detail="DATABASE_NOT_AVAILABLE")
+    uid = get_current_user_id(x_user_id, user_id)
+    ok = database.reset_user_chips(uid)
+    return {"success": ok}
+
+@app.post("/api/v1/ai/suggest-chips")
+@app.post("/api/ai/suggest-chips")
+def get_ai_suggest_chips(req: SuggestChipsRequest):
+    """
+    AI tự động gợi ý các thẻ từ khóa thông minh dựa theo ngữ cảnh và câu nói vừa trao đổi
+    """
+    chips = suggest_smart_chips(
+        context=req.context,
+        recent_text=req.recentText,
+        existing_chips=req.existingChips
+    )
+    return {"suggestedChips": chips}
 
 @app.get("/api/health")
 def health_check():
@@ -320,6 +373,7 @@ def health_check():
     return {
         "status": "UP",
         "service": "SignBridge-AI",
+        "database": "PostgreSQL" if DB_AVAILABLE else "Disabled",
         "whisper_model": MODEL_NAME,
         "llm_model": os.getenv("LLM_MODEL", LLM_MODEL),
         "llm_configured": api_key_configured,
@@ -352,7 +406,7 @@ def index_page():
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background: var(--bg); color: var(--text); padding: 24px 16px; display: flex; justify-content: center; }
-        .container { width: 100%; max-width: 820px; }
+        .container { width: 100%; max-width: 840px; }
         header { text-align: center; margin-bottom: 20px; }
         h1 { font-size: 26px; color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 8px; }
         .subtitle { color: var(--muted); font-size: 14px; margin-top: 6px; }
@@ -360,6 +414,7 @@ def index_page():
         .badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #e0e7ff; color: #3730a3; }
         .badge-green { background: #dcfce7; color: #166534; }
         .badge-amber { background: #fef3c7; color: #92400e; }
+        .badge-user { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; background: #f1f5f9; padding: 4px 12px; border-radius: 999px; border: 1px solid #cbd5e1; margin-top: 8px; }
         
         .main-tabs { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 2px solid var(--border); padding-bottom: 6px; }
         .main-tab-btn { padding: 10px 18px; border: none; background: transparent; cursor: pointer; font-size: 15px; font-weight: 700; color: var(--muted); border-radius: 8px; }
@@ -372,6 +427,9 @@ def index_page():
         .col { flex: 1; }
         label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
         select, input[type="text"] { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+
+        .mode-chip-btn { padding: 8px 14px; border-radius: 999px; background: #f1f5f9; border: 1px solid var(--border); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .mode-chip-btn.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
 
         .mic-box { text-align: center; padding: 16px 0; }
         .mic-btn { width: 72px; height: 72px; border-radius: 50%; border: none; background: #fee2e2; color: var(--danger); font-size: 28px; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(220,38,38,0.2); }
@@ -412,9 +470,17 @@ def index_page():
 
         .transcript-box { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 14px; color: #334155; margin-top: 14px; }
         
-        .chips-container { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-        .chip-tag { padding: 8px 14px; border-radius: 999px; background: #f1f5f9; border: 1px solid var(--border); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        .chips-container { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; min-height: 48px; }
+        .chip-tag { padding: 7px 12px; border-radius: 999px; background: #f1f5f9; border: 1px solid var(--border); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; user-select: none; }
+        .chip-tag:hover { border-color: var(--primary); background: #f8fafc; }
         .chip-tag.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+        .chip-tag.custom { border-style: dashed; border-color: #3b82f6; background: #eff6ff; }
+        .chip-tag.custom.selected { background: var(--primary); color: #fff; border-style: solid; }
+        .chip-tag .btn-del { font-size: 16px; margin-left: 4px; cursor: pointer; opacity: 0.6; line-height: 1; border: none; background: none; color: inherit; padding: 0 2px; }
+        .chip-tag .btn-del:hover { opacity: 1; color: var(--danger); font-weight: bold; }
+
+        .ai-chip-pill { padding: 6px 12px; border-radius: 999px; background: #dcfce7; color: #166534; border: 1px solid #86efac; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        .ai-chip-pill:hover { background: #bbf7d0; transform: translateY(-1px); }
     </style>
 </head>
 <body>
@@ -425,7 +491,13 @@ def index_page():
         <div class="badge-bar">
             <span class="badge">STT: PhoWhisper small (ct2)</span>
             <span class="badge badge-green" id="llmBadge">LLM: Active</span>
-            <span class="badge badge-amber">Latency: Optimized</span>
+            <span class="badge badge-amber">DB: PostgreSQL</span>
+        </div>
+        <div>
+            <div class="badge-user">
+                <span>👤 User ID: <strong id="userIdDisplay" style="color:var(--primary);">...</strong></span>
+                <button onclick="promptChangeUserId()" style="border:none; background:none; color:var(--primary); font-weight:700; cursor:pointer; text-decoration:underline;">Đổi ID</button>
+            </div>
         </div>
     </header>
 
@@ -441,7 +513,7 @@ def index_page():
             <div class="row">
                 <div class="col">
                     <label>Bối cảnh (Context Preset):</label>
-                    <select id="contextSelect">
+                    <select id="contextSelect" onchange="onContextChange()">
                         <option value="CAFE">Quán Ăn / Cà Phê (CAFE)</option>
                         <option value="PHARMACY">Hiệu Thuốc / Bệnh Viện (PHARMACY)</option>
                         <option value="PUBLIC">Hành Chính Công (PUBLIC)</option>
@@ -455,8 +527,8 @@ def index_page():
             </div>
 
             <div class="tabs" style="display:flex; gap:8px; margin-bottom:12px;">
-                <button class="chip-tag selected" id="btnModeMic" onclick="switchAudioMode('mic')">🔴 Ghi âm qua Mic</button>
-                <button class="chip-tag" id="btnModeUpload" onclick="switchAudioMode('upload')">📁 Tải file âm thanh (.mp3, .m4a, .wav)</button>
+                <button class="mode-chip-btn selected" id="btnModeMic" onclick="switchAudioMode('mic')">🔴 Ghi âm qua Mic</button>
+                <button class="mode-chip-btn" id="btnModeUpload" onclick="switchAudioMode('upload')">📁 Tải file âm thanh (.mp3, .m4a, .wav)</button>
             </div>
 
             <!-- Mode 1: Mic -->
@@ -498,6 +570,12 @@ def index_page():
 
                     <div class="quick-replies-title">⚡ 3 CÂU PHẢN HỒI NHANH (CHẠM ĐỂ PHÁT ÂM RA LOA):</div>
                     <div id="repliesGrid" class="quick-replies-grid"></div>
+
+                    <!-- Gợi ý từ khóa phản hồi -->
+                    <div style="margin-top:16px; padding:12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px;">
+                        <span style="font-size:12px; font-weight:700; color:#15803d; text-transform:uppercase;">💡 GỢI Ý TỪ KHÓA ĐỂ BẠN TRẢ LỜI (CHẠM ĐỂ CHỌN SANG CHIỀU ĐI):</span>
+                        <div id="summarySuggestedChips" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+                    </div>
                 </div>
 
                 <div class="transcript-box">
@@ -512,21 +590,32 @@ def index_page():
     <div id="tab-expand" class="tab-content" style="display:none;">
         <div class="card">
             <div class="card-title">🖐️ Người khiếm thính chọn Thẻ từ khóa (Chips)</div>
-            <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Chạm vào các thẻ từ khóa bên dưới để mô phỏng người khiếm thính chọn ý muốn nói:</p>
+            <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Chạm vào các thẻ từ khóa bên dưới để mô phỏng người khiếm thính chọn ý muốn nói. Thẻ có viền đứt nét là thẻ riêng của bạn (có nút <strong>&times;</strong> để xóa):</p>
             
+            <!-- Bộ thẻ từ Database -->
             <div class="chips-container" id="presetChips">
-                <span class="chip-tag" onclick="toggleChip(this)">Trà sữa trân châu</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Ít đường</span>
-                <span class="chip-tag" onclick="toggleChip(this)">50% đá</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Panadol giảm đau</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Uống sau ăn</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Bao nhiêu tiền</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Chuyển khoản QR</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Cho hỏi đường ra chợ</span>
-                <span class="chip-tag" onclick="toggleChip(this)">Cảm ơn</span>
+                <span style="color:var(--muted); font-size:13px;">Đang tải danh sách thẻ từ PostgreSQL...</span>
             </div>
 
-            <div style="margin-top:14px;">
+            <!-- Form thêm thẻ cá nhân -->
+            <div style="display:flex; gap:8px; margin: 12px 0;">
+                <input type="text" id="newChipInput" placeholder="Thêm thẻ cá nhân mới (VD: Dị ứng tôm, Không đường)..." style="flex:1;" onkeydown="if(event.key==='Enter') addNewChip()">
+                <button class="btn-primary" style="width:auto; padding:8px 16px; margin:0; white-space:nowrap;" onclick="addNewChip()">➕ Thêm Thẻ</button>
+                <button style="width:auto; padding:8px 14px; margin:0; white-space:nowrap; background:#fff; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer; font-weight:600; color:#64748b;" onclick="resetCustomChips()" title="Khôi phục thẻ hệ thống mặc định">🔄 Đặt lại</button>
+            </div>
+
+            <!-- Gợi ý thẻ từ AI -->
+            <div style="margin-top:14px; padding:12px; background:#f8fafc; border:1.5px dashed #93c5fd; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-size:13px; font-weight:700; color:#1e40af;">✨ AI GỢI Ý THẺ THEO BỐI CẢNH:</span>
+                    <button style="background:none; border:none; color:var(--primary); font-weight:700; cursor:pointer; font-size:13px;" onclick="requestAiChips()">✨ AI Gợi ý thêm thẻ</button>
+                </div>
+                <div id="aiSuggestedChipsContainer" style="display:flex; flex-wrap:wrap; gap:6px;">
+                    <span style="font-size:12px; color:var(--muted); font-style:italic;">Bấm 'AI Gợi ý thêm thẻ' để sinh từ khóa thông minh theo ngữ cảnh...</span>
+                </div>
+            </div>
+
+            <div style="margin-top:16px;">
                 <label>Các thẻ đã chọn (ngăn cách bằng dấu phẩy):</label>
                 <input type="text" id="customChipsInput" placeholder="VD: Trà sữa trân châu, Ít đường, 50% đá">
             </div>
@@ -559,12 +648,31 @@ const ICON_MAP = {
     "INFO": "ℹ️"
 };
 
+// Quản lý Multi-tenancy User ID
+let currentUserId = localStorage.getItem('signbridge_user_id');
+if (!currentUserId) {
+    currentUserId = 'user_' + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem('signbridge_user_id', currentUserId);
+}
+document.getElementById('userIdDisplay').innerText = currentUserId;
+
+function promptChangeUserId() {
+    const newId = prompt("Nhập User ID mới (để kiểm tra cơ chế cách ly dữ liệu giữa các người dùng):", currentUserId);
+    if (newId && newId.trim()) {
+        currentUserId = newId.trim();
+        localStorage.setItem('signbridge_user_id', currentUserId);
+        document.getElementById('userIdDisplay').innerText = currentUserId;
+        loadUserChips();
+    }
+}
+
 let mediaRecorder;
 let audioChunks = [];
 let recordedBlob = null;
 let isRecording = false;
 let recordTimerInterval = null;
 let recordSeconds = 0;
+let lastRecentTranscript = "";
 
 function switchMainTab(tab) {
     document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
@@ -662,6 +770,7 @@ async function submitAudioData(blobOrFile, fileName) {
     try {
         const res = await fetch('/api/summarize', {
             method: 'POST',
+            headers: { 'X-User-Id': currentUserId },
             body: formData
         });
         const data = await res.json();
@@ -673,6 +782,7 @@ async function submitAudioData(blobOrFile, fileName) {
             document.getElementById('summaryDisplay').innerText = data.summary;
             document.getElementById('transcriptDisplay').innerText = `"${data.transcript}"`;
             document.getElementById('procTimeBadge').innerText = (data.processing_time_ms / 1000).toFixed(1) + 's';
+            lastRecentTranscript = data.transcript || "";
 
             // Highlights
             const hlBox = document.getElementById('highlightsBox');
@@ -695,6 +805,24 @@ async function submitAudioData(blobOrFile, fileName) {
                 btn.onclick = () => speakText(r);
                 repGrid.appendChild(btn);
             });
+
+            // Suggested Chips
+            const sChipsBox = document.getElementById('summarySuggestedChips');
+            sChipsBox.innerHTML = '';
+            const suggestedChips = data.suggestedChips || [];
+            if (suggestedChips.length > 0) {
+                suggestedChips.forEach(chipText => {
+                    const pill = document.createElement('span');
+                    pill.className = 'ai-chip-pill';
+                    pill.innerHTML = `<span>➕ ${chipText}</span>`;
+                    pill.title = "Chạm để chuyển từ khóa này sang Chiều Đi";
+                    pill.onclick = () => selectSuggestedChipToTab2(chipText);
+                    sChipsBox.appendChild(pill);
+                });
+                renderAiSuggestedChips(suggestedChips);
+            } else {
+                sChipsBox.innerHTML = '<span style="font-size:12px; color:var(--muted);">Chưa có gợi ý từ khóa mới</span>';
+            }
         } else {
             alert("Lỗi: " + (data.detail || "Không thể xử lý"));
         }
@@ -704,10 +832,185 @@ async function submitAudioData(blobOrFile, fileName) {
     }
 }
 
+function selectSuggestedChipToTab2(chipText) {
+    const input = document.getElementById('customChipsInput');
+    const parts = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    if (!parts.includes(chipText)) {
+        parts.push(chipText);
+        input.value = parts.join(', ');
+    }
+    // Chuyển sang Tab Chiều Đi
+    document.querySelectorAll('.main-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    document.querySelectorAll('.main-tab-btn')[1].classList.add('active');
+    document.getElementById('tab-expand').style.display = 'block';
+}
+
+// ----------------- Quick Chips Multi-Tenant CRUD -----------------
+
+async function loadUserChips() {
+    const container = document.getElementById('presetChips');
+    const ctx = document.getElementById('contextSelect').value;
+    try {
+        const res = await fetch(`/api/v1/chips?context=${ctx}`, {
+            headers: { 'X-User-Id': currentUserId }
+        });
+        const chips = await res.json();
+        container.innerHTML = '';
+
+        if (!chips || chips.length === 0) {
+            container.innerHTML = '<span style="color:var(--muted); font-size:13px;">Chưa có thẻ nào cho ngữ cảnh này.</span>';
+            return;
+        }
+
+        const selectedSet = new Set(
+            document.getElementById('customChipsInput').value.split(',').map(s => s.trim()).filter(Boolean)
+        );
+
+        chips.forEach(chip => {
+            const span = document.createElement('span');
+            span.className = 'chip-tag' + (chip.is_system ? '' : ' custom') + (selectedSet.has(chip.text) ? ' selected' : '');
+            span.setAttribute('data-id', chip.id);
+            span.setAttribute('data-text', chip.text);
+
+            let html = `<span>${chip.text}</span>`;
+            if (!chip.is_system) {
+                html += `<button class="btn-del" onclick="deleteCustomChip(event, '${chip.id}')" title="Xóa thẻ riêng này">&times;</button>`;
+            }
+            span.innerHTML = html;
+            span.onclick = (e) => {
+                if (e.target.classList.contains('btn-del')) return;
+                toggleChip(span);
+            };
+            container.appendChild(span);
+        });
+    } catch (err) {
+        console.error("Lỗi nạp thẻ:", err);
+    }
+}
+
 function toggleChip(el) {
     el.classList.toggle('selected');
-    const selected = Array.from(document.querySelectorAll('.chip-tag.selected')).map(c => c.innerText);
+    updateSelectedChipsFromUI();
+}
+
+function updateSelectedChipsFromUI() {
+    // Chỉ chọn trong phạm vi #presetChips để tránh đụng độ các nút tab khác
+    const selected = Array.from(document.querySelectorAll('#presetChips .chip-tag.selected'))
+        .map(c => c.getAttribute('data-text') || c.innerText.replace('×', '').trim())
+        .filter(Boolean);
     document.getElementById('customChipsInput').value = selected.join(', ');
+}
+
+async function addNewChip() {
+    const input = document.getElementById('newChipInput');
+    const text = input.value.trim();
+    if (!text) return;
+
+    try {
+        const res = await fetch('/api/v1/chips', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': currentUserId
+            },
+            body: JSON.stringify({
+                text: text,
+                context: document.getElementById('contextSelect').value
+            })
+        });
+        if (res.ok) {
+            input.value = '';
+            await loadUserChips();
+        } else {
+            const err = await res.json();
+            alert("Lỗi: " + (err.detail || "Không thể thêm thẻ"));
+        }
+    } catch (e) {
+        alert("Lỗi kết nối: " + e.message);
+    }
+}
+
+async function deleteCustomChip(event, chipId) {
+    event.stopPropagation();
+    if (!confirm("Bạn có chắc muốn xóa thẻ riêng này?")) return;
+
+    try {
+        const res = await fetch(`/api/v1/chips/${chipId}`, {
+            method: 'DELETE',
+            headers: { 'X-User-Id': currentUserId }
+        });
+        if (res.ok) {
+            await loadUserChips();
+            updateSelectedChipsFromUI();
+        }
+    } catch (e) {
+        alert("Lỗi xóa thẻ: " + e.message);
+    }
+}
+
+async function resetCustomChips() {
+    if (!confirm("Khôi phục danh sách về thẻ mặc định của hệ thống? Toàn bộ thẻ cá nhân của bạn sẽ được xóa.")) return;
+    try {
+        const res = await fetch('/api/v1/chips/reset', {
+            method: 'POST',
+            headers: { 'X-User-Id': currentUserId }
+        });
+        if (res.ok) {
+            await loadUserChips();
+            updateSelectedChipsFromUI();
+        }
+    } catch (e) {
+        alert("Lỗi đặt lại: " + e.message);
+    }
+}
+
+async function requestAiChips() {
+    const container = document.getElementById('aiSuggestedChipsContainer');
+    container.innerHTML = '<span style="font-size:12px; color:var(--primary); font-weight:600;">⏳ AI đang suy nghĩ các từ khóa tối ưu...</span>';
+
+    const existingChips = Array.from(document.querySelectorAll('#presetChips .chip-tag')).map(c => c.getAttribute('data-text') || c.innerText.trim());
+
+    try {
+        const res = await fetch('/api/v1/ai/suggest-chips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                context: document.getElementById('contextSelect').value,
+                recentText: lastRecentTranscript || document.getElementById('prevOutgoing').value,
+                existingChips: existingChips
+            })
+        });
+        const data = await res.json();
+        renderAiSuggestedChips(data.suggestedChips || []);
+    } catch (e) {
+        container.innerHTML = '<span style="font-size:12px; color:var(--danger);">Lỗi gợi ý: ' + e.message + '</span>';
+    }
+}
+
+function renderAiSuggestedChips(chips) {
+    const container = document.getElementById('aiSuggestedChipsContainer');
+    container.innerHTML = '';
+    if (!chips || chips.length === 0) {
+        container.innerHTML = '<span style="font-size:12px; color:var(--muted); font-style:italic;">Không có gợi ý mới.</span>';
+        return;
+    }
+    chips.forEach(chipText => {
+        const pill = document.createElement('span');
+        pill.className = 'ai-chip-pill';
+        pill.innerHTML = `<span>➕ ${chipText}</span>`;
+        pill.title = "Bấm để lưu thành thẻ cá nhân và chọn luôn";
+        pill.onclick = async () => {
+            document.getElementById('newChipInput').value = chipText;
+            await addNewChip();
+            selectSuggestedChipToTab2(chipText);
+        };
+        container.appendChild(pill);
+    });
+}
+
+function onContextChange() {
+    loadUserChips();
 }
 
 async function submitExpand() {
@@ -721,7 +1024,10 @@ async function submitExpand() {
     try {
         const res = await fetch('/api/expand', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-User-Id': currentUserId
+            },
             body: JSON.stringify({
                 context: document.getElementById('contextSelect').value,
                 chips: chips
@@ -741,7 +1047,7 @@ async function submitExpand() {
 
 function speakText(text) {
     if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel(); // Dừng câu đang nói trước đó nếu có
+        window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
         u.lang = 'vi-VN';
         u.rate = 1.0;
@@ -755,6 +1061,11 @@ function speakCurrentSentence() {
     const text = document.getElementById('spokenSentenceDisplay').innerText;
     speakText(text);
 }
+
+// Khởi chạy khi load trang
+document.addEventListener('DOMContentLoaded', () => {
+    loadUserChips();
+});
 </script>
 </body>
 </html>
