@@ -103,3 +103,92 @@ def test_guardrail_keeps_numbers_missing_from_summary():
     assert "15 phút" in data["summary"]
     assert data["iconCode"] == "INFO"
     assert len(data["quickReplies"]) == 3
+
+
+# ---------- /api/sign/glosses: ký hiệu nhận diện trên thiết bị (mục 4.2a) ----------
+
+def test_device_glosses_high_confidence_in_vocabulary():
+    out = conversation.check_device_glosses("PHARMACY", ["đau", " ĐẦU "], [0.95, 0.9])
+    assert out["glosses"] == ["ĐAU", "ĐẦU"]
+    assert out["confidence"] == 0.9
+    assert out["needConfirm"] is False
+    assert 3 <= len(out["suggestedChips"]) <= 6
+
+
+def test_device_gloss_low_confidence_becomes_unknown_but_is_suggested_first():
+    out = conversation.check_device_glosses("PHARMACY", ["SỐT", "THUỐC"], [0.4, 0.99])
+    assert out["glosses"] == ["UNKNOWN", "THUỐC"]
+    assert out["needConfirm"] is True
+    assert out["confidence"] < conversation.CONFIDENCE_THRESHOLD
+    assert out["suggestedChips"][:2] == ["Sốt", "Thuốc"]
+
+
+def test_device_gloss_outside_vocabulary_is_unknown_and_not_suggested():
+    out = conversation.check_device_glosses("CAFE", ["BIA", "CÀ PHÊ"], [0.99, 0.99])
+    assert out["glosses"] == ["UNKNOWN", "CÀ PHÊ"]
+    assert out["needConfirm"] is True
+    assert "Bia" not in out["suggestedChips"]
+
+
+def test_device_glosses_empty_is_no_sign_detected():
+    with pytest.raises(ApiError) as e:
+        conversation.check_device_glosses("CAFE", [], [])
+    assert (e.value.status, e.value.code) == (422, "NO_SIGN_DETECTED")
+
+
+def test_model_labels_extend_vocabulary_and_keep_original_text(vsl_labels_file):
+    vsl_labels_file(["đau bụng", "hiệu thuốc", "1000 (một nghìn)"])
+    out = conversation.check_device_glosses("PHARMACY", ["Đau bụng", "hiệu thuốc"], [0.9, 0.8])
+    assert out["glosses"] == ["ĐAU BỤNG", "HIỆU THUỐC"]
+    assert out["needConfirm"] is False
+    assert out["suggestedChips"][:2] == ["đau bụng", "hiệu thuốc"]
+    assert conversation.gloss_template_sentence(out["glosses"]) == "Đau bụng, hiệu thuốc."
+
+
+def test_model_labels_accept_dict_format(vsl_labels_file):
+    vsl_labels_file({"chào": 0, "bao nhiêu": 1})
+    assert set(conversation.vsl_labels()) == {"CHÀO", "BAO NHIÊU"}
+
+
+def test_missing_or_broken_labels_file_falls_back_to_spec_vocabulary(vsl_labels_file):
+    path = vsl_labels_file([])
+    path.write_text("{khong hop le", encoding="utf-8")
+    conversation._load_vsl_labels.cache_clear()
+    assert conversation.vsl_labels() == {}
+    assert conversation.check_device_glosses("CAFE", ["ĐÁ"], [0.9])["glosses"] == ["ĐÁ"]
+
+
+def test_gloss_sentence_passes_through():
+    assert conversation.check_gloss_sentence(
+        {"spoken_sentence": " Chào bạn, mình bị đau đầu. "}, ["ĐAU", "ĐẦU"]) == "Chào bạn, mình bị đau đầu."
+
+
+@pytest.mark.parametrize("out", [
+    None,
+    {},
+    {"spoken_sentence": ""},
+    {"spoken_sentence": 123},
+    {"spoken_sentence": "Mình đau đầu 2 ngày rồi."},      # bịa thêm số
+    {"spoken_sentence": "chữ " * 41},                       # quá 40 từ
+])
+def test_bad_gloss_sentence_falls_back_to_template(out):
+    assert conversation.check_gloss_sentence(out, ["ĐAU", "ĐẦU"]) == "Đau, Đầu."
+
+
+def test_gloss_sentence_may_repeat_numbers_from_glosses(vsl_labels_file):
+    vsl_labels_file(["1000 (một nghìn)"])
+    sentence = "Mình muốn hỏi về 1000 ạ."
+    assert conversation.check_gloss_sentence({"spoken_sentence": sentence}, ["1000 (MỘT NGHÌN)"]) == sentence
+
+
+def test_llm_client_is_reused_and_never_retries(monkeypatch):
+    import llm_service
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_BASE_URL", "http://ai.local/v1")
+    llm_service._openai_client.cache_clear()
+    try:
+        first, second = llm_service.get_openai_client(), llm_service.get_openai_client()
+        assert first is second
+        assert first.max_retries == 0
+    finally:
+        llm_service._openai_client.cache_clear()

@@ -1,4 +1,5 @@
 """Cấu hình chung: SQLite tạm, không nạp PhoWhisper, không gọi LLM thật (chế độ mock)."""
+import json
 import os
 import sys
 import tempfile
@@ -8,6 +9,8 @@ _TMP = tempfile.mkdtemp(prefix="signbridge-test-")
 os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(_TMP, "test.db").replace("\\", "/")
 os.environ["WHISPER_PRELOAD"] = "0"
 os.environ["LLM_API_KEY"] = ""
+# Không phụ thuộc data/vsl/labels.json trên máy dev; test nào cần nhãn thì dùng fixture vsl_labels_file
+os.environ["VSL_LABELS_PATH"] = os.path.join(_TMP, "khong-co-labels.json")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -34,3 +37,19 @@ def fake_stt(monkeypatch):
 
     monkeypatch.setattr(app_module, "run_transcribe", fake)
     return state
+
+
+@pytest.fixture
+def vsl_labels_file(monkeypatch, tmp_path):
+    """Ghi labels.json giả (định dạng list theo index như tools/convert_vsl_tflite.py sinh ra)."""
+    import conversation
+
+    def write(labels):
+        path = tmp_path / "labels.json"
+        path.write_text(json.dumps(labels, ensure_ascii=False), encoding="utf-8")
+        monkeypatch.setattr(conversation, "VSL_LABELS_PATH", str(path))
+        conversation._load_vsl_labels.cache_clear()
+        return path
+
+    yield write
+    conversation._load_vsl_labels.cache_clear()

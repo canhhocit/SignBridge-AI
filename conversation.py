@@ -2,6 +2,9 @@
 
 Không phụ thuộc HTTP/FastAPI. Không lưu gì.
 """
+import functools
+import json
+import logging
 import os
 import re
 import unicodedata
@@ -9,11 +12,22 @@ from typing import Any, Dict, List, Optional
 
 from errors import ApiError
 
+logger = logging.getLogger("SignBridge.Conversation")
+
 CONTEXTS = ("CAFE", "PHARMACY", "PUBLIC", "CUSTOM")
 UNKNOWN = "UNKNOWN"
 
 # confidence >= ngưỡng thì mobile phát loa luôn
 CONFIDENCE_THRESHOLD = float(os.getenv("SIGN_CONFIDENCE_THRESHOLD", "0.7"))
+# /api/sign/glosses: xác suất softmax tối thiểu của từng ký hiệu nhận diện trên thiết bị
+VSL_MIN_GLOSS_CONFIDENCE = float(os.getenv("VSL_MIN_GLOSS_CONFIDENCE", "0.7"))
+# Nhãn của model nhận diện offline trên mobile (sinh bởi tools/convert_vsl_tflite.py)
+VSL_LABELS_PATH = os.getenv(
+    "VSL_LABELS_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "vsl", "labels.json"),
+)
+MAX_SENTENCE_WORDS = 40
+MAX_SUGGESTED_CHIPS = 6
 
 _COMMON = ("XIN CHÀO", "CẢM ƠN", "CÓ", "KHÔNG", "THANH TOÁN", "BAO NHIÊU")
 _NUMBER_TIME = ("MỘT", "HAI", "NGÀY")
@@ -74,6 +88,89 @@ def check_sign_output(context: str, out: Optional[Dict[str, Any]]) -> Dict[str, 
         "spoken_sentence": sentence,
         "suggestedChips": chips,
     }
+
+
+@functools.lru_cache(maxsize=4)
+def _load_vsl_labels(path: str) -> Dict[str, str]:
+    """Đọc labels.json (list theo index hoặc {"nhãn": index}) → {gloss chuẩn hoá: nhãn gốc để hiển thị}."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        logger.warning("Không đọc được nhãn VSL (%s)", type(e).__name__)
+        return {}
+    names = data.keys() if isinstance(data, dict) else data if isinstance(data, list) else []
+    return {normalize_gloss(n): n.strip() for n in names if isinstance(n, str) and n.strip()}
+
+
+def vsl_labels() -> Dict[str, str]:
+    return _load_vsl_labels(VSL_LABELS_PATH)
+
+
+def display_gloss(gloss: str) -> str:
+    """Gloss chuẩn hoá → chữ hiển thị trên thẻ: nhãn gốc của model, hoặc viết hoa chữ đầu (mục 7.1)."""
+    return vsl_labels().get(gloss) or gloss.capitalize()
+
+
+def check_device_glosses(context: str, glosses: List[str], confidences: List[float]) -> Dict[str, Any]:
+    """Mục 4.2a, 7.3, 7.4: ký hiệu nhận diện trên thiết bị → ép về bộ ký hiệu.
+
+    Bộ ký hiệu = mục 7.2 theo context ∪ nhãn model (VSL_LABELS_PATH).
+    Ngoài bộ → UNKNOWN. Xác suất < VSL_MIN_GLOSS_CONFIDENCE → UNKNOWN nhưng giữ làm thẻ gợi ý.
+    """
+    if not glosses:
+        raise ApiError.no_sign_detected()
+    allowed = set(allowed_glosses(context)) | set(vsl_labels())
+    result: List[str] = []
+    candidates: List[str] = []
+    for raw, conf in zip(glosses, confidences):
+        g = normalize_gloss(raw)
+        if g not in allowed:
+            result.append(UNKNOWN)
+        elif conf < VSL_MIN_GLOSS_CONFIDENCE:
+            result.append(UNKNOWN)
+            candidates.append(g)
+        else:
+            result.append(g)
+
+    confidence = max(0.0, min(1.0, min(confidences)))
+    if UNKNOWN in result:
+        confidence = min(confidence, CONFIDENCE_THRESHOLD - 0.01)
+    need_confirm = UNKNOWN in result or confidence < CONFIDENCE_THRESHOLD
+
+    chips: List[str] = []
+    for g in candidates + [x for x in result if x != UNKNOWN] + allowed_glosses(context):
+        chip = display_gloss(g)
+        if chip not in chips:
+            chips.append(chip)
+        if len(chips) == MAX_SUGGESTED_CHIPS:
+            break
+    return {
+        "glosses": result,
+        "confidence": confidence,
+        "needConfirm": need_confirm,
+        "suggestedChips": chips,
+    }
+
+
+def gloss_template_sentence(glosses: List[str]) -> str:
+    """Câu dự phòng chỉ gồm đúng các ký hiệu, không thêm ý (mục 7.3 bước 2)."""
+    text = ", ".join(display_gloss(g) for g in glosses if g != UNKNOWN)
+    return (text[:1].upper() + text[1:] + ".") if text else ""
+
+
+def check_gloss_sentence(out: Optional[Dict[str, Any]], glosses: List[str]) -> str:
+    """Mục 7.3 bước 2: câu LLM sai schema, quá 40 từ hoặc có số không có trong glosses → câu dự phòng."""
+    sentence = out.get("spoken_sentence") if isinstance(out, dict) else None
+    if isinstance(sentence, str) and sentence.strip():
+        sentence = sentence.strip()
+        numbers_in_glosses = set(re.findall(r"\d+", " ".join(glosses)))
+        if len(sentence.split()) <= MAX_SENTENCE_WORDS \
+                and set(re.findall(r"\d+", sentence)) <= numbers_in_glosses:
+            return sentence
+    return gloss_template_sentence(glosses)
 
 
 def check_expand_output(out: Optional[Dict[str, Any]]) -> Dict[str, str]:
