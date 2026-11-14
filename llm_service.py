@@ -182,24 +182,33 @@ def verify_and_protect_numbers(transcript: str, data: Dict[str, Any]) -> Dict[st
                 summary = val
             summary_lower = summary.lower()
 
-    # 3. Lọc highlights: chỉ giữ phần tử có trong summary
+    # 3. Lọc highlights: chỉ giữ phần tử có trong summary.
+    # So khớp không phân biệt hoa/thường nhưng trả đúng đoạn nguyên văn của summary (mục 4.4)
+    def exact_in_summary(text: str) -> Optional[str]:
+        idx = summary.lower().find(text.lower())
+        if idx < 0:
+            return None
+        exact = summary[idx:idx + len(text)]
+        return exact if exact.lower() == text.lower() else None
+
     clean_highlights = []
     seen_texts = set()
     for h in highlights:
         if isinstance(h, dict):
-            htext = str(h.get("text", "")).strip()
+            htext = exact_in_summary(str(h.get("text", "")).strip()) if str(h.get("text", "")).strip() else None
             htype = str(h.get("type", "OTHER")).upper()
             if htype not in VALID_HIGHLIGHT_TYPES:
                 htype = "OTHER"
-            if htext and htext.lower() in summary.lower() and htext.lower() not in seen_texts:
+            if htext and htext.lower() not in seen_texts:
                 clean_highlights.append({"type": htype, "text": htext})
                 seen_texts.add(htext.lower())
 
     # 4. Tự động thêm các số quan trọng vào highlights nếu LLM bỏ quên
     for val, ptype in needed_entities:
-        if val.lower() in summary.lower() and val.lower() not in seen_texts:
-            clean_highlights.append({"type": ptype, "text": val})
-            seen_texts.add(val.lower())
+        exact = exact_in_summary(val)
+        if exact and exact.lower() not in seen_texts:
+            clean_highlights.append({"type": ptype, "text": exact})
+            seen_texts.add(exact.lower())
 
     data["summary"] = summary
     data["highlights"] = clean_highlights
@@ -462,11 +471,32 @@ def mock_summarize(transcript: str, context: str) -> Dict[str, Any]:
     }
     return verify_and_protect_numbers(transcript, raw_data)
 
-def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None, previous_incoming: Optional[str] = None) -> Dict[str, Any]:
+SIGN_SYSTEM_PROMPT = """Bạn là bộ nhận diện ngôn ngữ ký hiệu cho người khiếm thính.
+Đầu vào là chuỗi khung hình liên tiếp, 4 khung hình mỗi 1,5 giây.
+
+QUY TẮC BẮT BUỘC:
+1. Chỉ được trả "glosses" là chuỗi GIỐNG HỆT một mục trong DANH_SÁCH_KÝ_HIỆU, hoặc "UNKNOWN".
+   Không dùng từ đồng nghĩa, không đổi chữ, không thêm từ ngoài danh sách.
+2. Không chắc một ký hiệu → "UNKNOWN". Không đoán.
+3. Nếu có bất kỳ "UNKNOWN" → "spoken_sentence" = "" và "confidence" < 0.7.
+4. "spoken_sentence" chỉ diễn đạt đúng nghĩa các glosses. Được thêm lời chào, kính ngữ, từ nối.
+   KHÔNG thêm triệu chứng, món, số lượng, giá, thời gian, tên sản phẩm hay yêu cầu không có trong glosses.
+5. Chỉ trả JSON đúng schema, không giải thích:
+{"glosses": ["..."], "confidence": 0.0, "spoken_sentence": "...", "suggestedChips": ["...", "...", "..."]}
+"""
+
+
+def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None,
+                   previous_incoming: Optional[str] = None, allowed_glosses: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Nhận diện ngôn ngữ ký hiệu từ chuỗi frame ảnh JPEG (mục 4.2, 7.1).
-    Có Fallback bộ từ vựng chuẩn ngữ cảnh để bảo đảm phản hồi tức thì và không lỗi khi demo.
+    Nhận diện ngôn ngữ ký hiệu từ chuỗi frame ảnh JPEG (mục 4.2, 7.3).
+    Chưa cấu hình LLM_API_KEY → trả dữ liệu mẫu theo ngữ cảnh (chế độ mock, như MockAiGateway).
+    Đã cấu hình mà gọi lỗi → ném ApiError (502/504) để mobile chuyển sang thẻ từ khóa;
+    KHÔNG trả câu mẫu vì mobile sẽ phát loa một câu người dùng không hề ký hiệu.
     """
+    from errors import ApiError
+    import openai
+
     context_fallbacks = {
         "PHARMACY": {
             "glosses": ["ĐAU", "ĐẦU", "MUA", "THUỐC"],
@@ -503,50 +533,47 @@ def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_
         }
 
     client = get_openai_client()
-    if not client or not frames_bytes:
+    if not client:
         return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
 
+    import base64
+    # Chọn frame đầu và frame giữa để gửi vision (giảm độ trễ)
+    indices = [0]
+    if len(frames_bytes) > 2:
+        indices.append(len(frames_bytes) // 2)
+
+    text = (f"DANH_SÁCH_KÝ_HIỆU: {json.dumps(allowed_glosses or [], ensure_ascii=False)}\n"
+            f"NGỮ_CẢNH: {context}\n"
+            f"CÂU_NHÂN_VIÊN_VỪA_NÓI: {previous_incoming or 'không có'}\n"
+            f"THẺ_CÁ_NHÂN: {json.dumps(personal_chips or [], ensure_ascii=False)}")
+    content_parts = [{"type": "text", "text": text}]
+    for idx in indices:
+        b64 = base64.b64encode(frames_bytes[idx]).decode("utf-8")
+        content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
 
     try:
-        import base64
-        # Chọn frame đầu và frame giữa để gửi vision
-        b64_list = []
-        indices = [0]
-        if len(frames_bytes) > 2:
-            indices.append(len(frames_bytes) // 2)
-        for idx in indices:
-            b64_list.append(base64.b64encode(frames_bytes[idx]).decode('utf-8'))
-
-        content_parts = [
-            {"type": "text", "text": f"Ngữ cảnh: {context}. Bộ ký hiệu cho phép: {context}. Nhận diện cử chỉ tay trong ảnh và trả về JSON: glosses (array chữ hoa), confidence (0.0-1.0), spoken_sentence (câu lịch sự tiếng Việt), suggestedChips (array 3 từ)."}
-        ]
-        for b64 in b64_list:
-            content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
-
         response = client.chat.completions.create(
             model=os.getenv("LLM_MODEL", LLM_MODEL).strip(),
             messages=[
-                {"role": "system", "content": "Bạn là bộ nhận diện ngôn ngữ ký hiệu VSL cho người khiếm thính. Trả về đúng JSON theo schema."},
+                {"role": "system", "content": SIGN_SYSTEM_PROMPT},
                 {"role": "user", "content": content_parts}
             ],
             response_format={"type": "json_object"},
             temperature=0.0,
             max_tokens=150,
-            timeout=3.0
+            timeout=float(os.getenv("AI_TIMEOUT_SIGN", "6"))
         )
         content = clean_json_text(response.choices[0].message.content or "{}")
-        data = json.loads(content)
-        if data.get("glosses") and data.get("spoken_sentence"):
-            return {
-                "glosses": data.get("glosses", []),
-                "confidence": float(data.get("confidence", 0.85)),
-                "spoken_sentence": str(data.get("spoken_sentence", "")),
-                "suggestedChips": data.get("suggestedChips", ["Đồng ý", "Cảm ơn", "Hỏi lại"])
-            }
-    except Exception as e:
-        logger.warning(f"Vision fallback do: {e}")
-
-    return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
+        return json.loads(content)
+    except openai.APITimeoutError:
+        logger.warning("AI sign: AI_TIMEOUT")
+        raise ApiError.ai_timeout()
+    except openai.APIError as e:
+        logger.warning("AI sign: AI_UPSTREAM_ERROR (%s)", type(e).__name__)
+        raise ApiError.ai_upstream_error("Dịch vụ AI trả lỗi.")
+    except ValueError:
+        logger.warning("AI sign: AI_UPSTREAM_ERROR sai định dạng")
+        raise ApiError.ai_upstream_error("AI trả dữ liệu sai định dạng.")
 
 def suggest_smart_chips(context: str = "CUSTOM", recent_text: Optional[str] = None, existing_chips: Optional[List[str]] = None) -> List[str]:
     """
