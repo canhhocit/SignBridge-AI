@@ -2,6 +2,10 @@ import time
 import os
 import sys
 
+# Tắt kiểm tra online của HuggingFace Hub
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 # Đảm bảo in tiếng Việt chuẩn trên Windows console
 if sys.platform == "win32":
     try:
@@ -24,7 +28,15 @@ def test_transcription(audio_path, language="vi"):
 
     print(f"[*] Đang nạp model '{MODEL_NAME}' từ: {MODEL_DIR}...")
     t0 = time.time()
-    model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8", download_root=MODEL_DIR)
+    cpu_threads = min(4, os.cpu_count() or 4)
+    model = WhisperModel(
+        MODEL_NAME,
+        device="cpu",
+        compute_type="int8",
+        download_root=MODEL_DIR,
+        local_files_only=True,
+        cpu_threads=cpu_threads
+    )
     t_load = time.time() - t0
     print(f"[+] Model đã sẵn sàng ({t_load:.2f}s)\n")
 
@@ -33,8 +45,10 @@ def test_transcription(audio_path, language="vi"):
     segments, info = model.transcribe(
         audio_path,
         language=language,
-        beam_size=5,
-        vad_filter=True  # Lọc khoảng lặng để tăng tốc
+        beam_size=1,                         # Greedy search tối ưu tốc độ
+        temperature=0.0,
+        condition_on_previous_text=False,
+        vad_filter=True                      # Lọc khoảng lặng để tăng tốc
     )
     
     text_segments = []
