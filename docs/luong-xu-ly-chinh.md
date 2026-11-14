@@ -210,6 +210,47 @@ Ngưỡng đề xuất: `confidence` ≥ 0.7 → mobile phát loa luôn; < 0.7 �
 
 ---
 
+### 4.2a. `POST /api/sign/glosses` — ký hiệu nhận diện trên thiết bị → câu nói (luồng Hybrid)
+
+Mobile chạy model TFLite offline (MediaPipe landmark → LSTM, xem `docs/guideline-vsl-hybrid.md`), mỗi clip ký hiệu ra 1 nhãn + xác suất, rồi gửi cả chuỗi lên. Không gửi ảnh → request nhỏ, không cần LLM vision. Alias: `/api/v1/sign/glosses`.
+
+**Request:** `Content-Type: application/json`
+
+| Field | Kiểu | Bắt buộc | Ràng buộc | Mô tả |
+|---|---|---|---|---|
+| `context` | string | có | enum `context` | Bối cảnh |
+| `glosses` | string[] | có | 0–10 phần tử, mỗi phần tử 1–50 ký tự | Nhãn model trả về, đúng thứ tự ký. Gửi nguyên văn `labels.json` |
+| `confidences` | number[] | có | cùng số phần tử với `glosses`, mỗi số 0–1 | Xác suất softmax top-1 của từng ký hiệu |
+| `personalChips` | string[] | không | ≤ 20 phần tử, mỗi phần tử ≤ 50 ký tự | Như mục 4.2 |
+| `previousIncoming` | string | không | ≤ 300 ký tự | Như mục 4.2 |
+
+```json
+{
+  "context": "PHARMACY",
+  "glosses": ["đau bụng", "hiệu thuốc"],
+  "confidences": [0.93, 0.81],
+  "previousIncoming": null
+}
+```
+
+**Response 200:** giống hệt mục 4.2 (`glosses`, `confidence`, `spoken_sentence`, `suggestedChips`).
+
+**Server xử lý** (mục 7.3, 7.4):
+
+1. Chuẩn hoá từng gloss (NFC, khoảng trắng, viết hoa). Bộ ký hiệu = mục 7.2 theo `context` ∪ nhãn model (`VSL_LABELS_PATH`). Ngoài bộ → `UNKNOWN`.
+2. Xác suất < `VSL_MIN_GLOSS_CONFIDENCE` (mặc định 0.7) → `UNKNOWN`, nhãn đó được đưa lên đầu `suggestedChips` để người dùng xác nhận.
+3. `confidence` = xác suất nhỏ nhất. Có `UNKNOWN` hoặc `confidence` < 0.7 → `spoken_sentence = ""`, **không gọi LLM**.
+4. Ngược lại: LLM text ghép câu (timeout `AI_TIMEOUT_GLOSSES` = 4 giây). Câu sai schema, > 40 từ, hoặc có chữ số không có trong glosses → thay bằng câu dự phòng ghép đúng các gloss (vd `"Đau bụng, hiệu thuốc."`).
+5. LLM lỗi/timeout hoặc chưa cấu hình → câu dự phòng, **không** trả 502/504. Khác mục 4.2 vì ký hiệu đã được model trên thiết bị xác định; câu dự phòng không thêm ý.
+6. Lượt không có `previousIncoming`/`personalChips`: câu được cache trong RAM (256 mục, theo `context` + glosses). Không ghi đĩa/DB.
+
+| HTTP | `error.code` | Khi nào |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | Sai enum, vượt giới hạn, `confidences` lệch số phần tử |
+| 422 | `NO_SIGN_DETECTED` | `glosses` rỗng |
+
+---
+
 ### 4.3. `POST /api/expand` — thẻ từ khóa → câu nói
 
 **Request:** `Content-Type: application/json`
@@ -325,6 +366,7 @@ spring.servlet.multipart.max-request-size=6MB
 |---|---|---|---|---|---|
 | `SIGN_RECOGNIZE` | `/api/sign` | LLM vision | system prompt + danh sách ký hiệu + `context` + `previousIncoming` + `personalChips` + frames theo thứ tự | `SignAiOutput` | 6 giây |
 | `EXPAND` | `/api/expand` | LLM text | system prompt + `context` + `chips` + `previousIncoming` | `ExpandAiOutput` | 4 giây |
+| `GLOSS_COMPOSE` | `/api/sign/glosses` | LLM text | system prompt + glosses đã kiểm tra + `context` + `previousIncoming` + `personalChips` | `ExpandAiOutput` | 4 giây |
 | `TRANSCRIBE` | `/api/summarize` | STT | audio m4a, ngôn ngữ `vi`, gợi ý từ vựng theo `context` (nếu nhà cung cấp hỗ trợ) | văn bản thô | 5 giây |
 | `SUMMARIZE` | `/api/summarize` | LLM text | system prompt + `transcript` + `context` + `previousOutgoing` | `SummarizeAiOutput` | 4 giây |
 

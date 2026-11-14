@@ -41,7 +41,7 @@ def test_unknown_path_is_not_server_error(client):
 
 def test_openapi_lists_all_endpoints(client):
     paths = client.get("/openapi.json").json()["paths"]
-    for p in ("/api/health", "/api/sign", "/api/expand", "/api/summarize"):
+    for p in ("/api/health", "/api/sign", "/api/sign/glosses", "/api/expand", "/api/summarize"):
         assert p in paths
 
 
@@ -318,3 +318,133 @@ def test_request_log_uses_forwarded_ip(client, caplog):
     with caplog.at_level(logging.INFO, logger="SignBridge.Request"):
         client.get("/api/health", headers={"X-Forwarded-For": "203.0.113.7, 10.0.0.1"})
     assert any("ip=203.0.113.7" in r.getMessage() for r in caplog.records)
+
+
+# ---------- /api/sign/glosses (mục 4.2a, luồng Hybrid) ----------
+
+def glosses_body(glosses=("ĐAU", "ĐẦU"), confidences=(0.95, 0.9), **extra):
+    return {"context": "PHARMACY", "glosses": list(glosses), "confidences": list(confidences), **extra}
+
+
+class _CountingClient:
+    """Client LLM giả đếm số lần gọi; behaviour là chuỗi JSON trả về hoặc exception."""
+    def __init__(self, behaviour):
+        self.calls = 0
+        outer = self
+
+        class _Completions:
+            def create(self, **_kwargs):
+                outer.calls += 1
+                return _FakeCompletions(behaviour).create()
+        self.chat = type("Chat", (), {"completions": _Completions()})
+
+
+@pytest.fixture
+def fake_llm(monkeypatch):
+    llm_service._gloss_sentence_first_turn.cache_clear()
+
+    def install(behaviour):
+        fake = _CountingClient(behaviour)
+        monkeypatch.setattr(llm_service, "get_openai_client", lambda: fake)
+        return fake
+
+    yield install
+    llm_service._gloss_sentence_first_turn.cache_clear()
+
+
+def test_glosses_mock_mode_returns_template_sentence(client):
+    res = client.post("/api/sign/glosses", json=glosses_body())
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["glosses"] == ["ĐAU", "ĐẦU"]
+    assert body["confidence"] == 0.9
+    assert body["spoken_sentence"] == "Đau, Đầu."
+    assert 3 <= len(body["suggestedChips"]) <= 6
+
+
+def test_glosses_v1_alias(client):
+    assert client.post("/api/v1/sign/glosses", json=glosses_body()).status_code == 200
+
+
+def test_glosses_low_confidence_skips_llm_and_clears_sentence(client, fake_llm):
+    llm = fake_llm('{"spoken_sentence": "không được dùng"}')
+    res = client.post("/api/sign/glosses", json=glosses_body(confidences=(0.95, 0.3)))
+    assert res.status_code == 200
+    assert res.json()["glosses"] == ["ĐAU", "UNKNOWN"]
+    assert res.json()["spoken_sentence"] == ""
+    assert res.json()["suggestedChips"][0] == "Đầu"
+    assert llm.calls == 0
+
+
+def test_glosses_real_mode_uses_llm_sentence(client, fake_llm):
+    llm = fake_llm('{"spoken_sentence": "Chào bạn, mình bị đau đầu."}')
+    res = client.post("/api/sign/glosses", json=glosses_body())
+    assert res.json()["spoken_sentence"] == "Chào bạn, mình bị đau đầu."
+    assert llm.calls == 1
+
+
+def test_glosses_first_turn_is_cached_but_contextual_turn_is_not(client, fake_llm):
+    llm = fake_llm('{"spoken_sentence": "Chào bạn, mình bị đau đầu."}')
+    for _ in range(3):
+        client.post("/api/sign/glosses", json=glosses_body())
+    assert llm.calls == 1
+    for _ in range(2):
+        client.post("/api/sign/glosses", json=glosses_body(previousIncoming="Bạn đau lâu chưa?"))
+    assert llm.calls == 3
+
+
+def test_glosses_llm_adding_number_falls_back_to_template(client, fake_llm):
+    fake_llm('{"spoken_sentence": "Mình bị đau đầu 3 ngày rồi."}')
+    assert client.post("/api/sign/glosses", json=glosses_body()).json()["spoken_sentence"] == "Đau, Đầu."
+
+
+@pytest.mark.parametrize("behaviour", [
+    openai.APITimeoutError(request=_REQ),
+    openai.APIConnectionError(request=_REQ),
+    "khong phai json",
+])
+def test_glosses_llm_failure_falls_back_to_template_and_is_not_cached(client, fake_llm, behaviour):
+    llm = fake_llm(behaviour)
+    for _ in range(2):
+        res = client.post("/api/sign/glosses", json=glosses_body())
+        assert res.status_code == 200
+        assert res.json()["spoken_sentence"] == "Đau, Đầu."
+    assert llm.calls == 2
+
+
+def test_glosses_accept_model_labels(client, vsl_labels_file):
+    vsl_labels_file(["đau bụng", "hiệu thuốc"])
+    res = client.post("/api/sign/glosses", json=glosses_body(glosses=("đau bụng", "hiệu thuốc")))
+    assert res.json()["glosses"] == ["ĐAU BỤNG", "HIỆU THUỐC"]
+    assert res.json()["spoken_sentence"] == "Đau bụng, hiệu thuốc."
+    assert client.get("/api/health").json()["vsl_labels"] == 2
+
+
+def test_glosses_empty_is_no_sign_detected(client):
+    assert_error(client.post("/api/sign/glosses", json=glosses_body(glosses=(), confidences=())),
+                 422, "NO_SIGN_DETECTED")
+
+
+@pytest.mark.parametrize("body", [
+    glosses_body(confidences=(0.9,)),                                   # lệch số phần tử
+    glosses_body(glosses=["ĐAU"] * 11, confidences=[0.9] * 11),         # > 10 ký hiệu
+    glosses_body(confidences=(0.9, 1.5)),
+    glosses_body(confidences=(0.9, -0.1)),
+    glosses_body(glosses=("ĐAU", "   ")),
+    glosses_body(glosses=("ĐAU", "x" * 51)),
+    glosses_body(previousIncoming="x" * 301),
+    glosses_body(personalChips=["a"] * 21),
+    {**glosses_body(), "context": "BAR"},
+    {k: v for k, v in glosses_body().items() if k != "context"},
+    {k: v for k, v in glosses_body().items() if k != "confidences"},
+])
+def test_glosses_rejects_invalid_body(client, body):
+    assert_error(client.post("/api/sign/glosses", json=body), 400, "INVALID_REQUEST")
+
+
+def test_glosses_log_has_no_payload(client, caplog):
+    secret = "NOI-DUNG-NGUOI-DUNG"
+    with caplog.at_level(logging.INFO):
+        client.post("/api/sign/glosses", json=glosses_body(previousIncoming=secret))
+    assert any("POST /api/sign/glosses status=200" in r.getMessage() for r in caplog.records)
+    assert all(secret not in r.getMessage() for r in caplog.records)

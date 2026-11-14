@@ -26,7 +26,8 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 from errors import ApiError, error_body, install_error_handlers
 import conversation
 from conversation import CONTEXTS
-from llm_service import summarize_text, expand_chips, recognize_sign, suggest_smart_chips, LLM_MODEL, LLM_BASE_URL
+from llm_service import (summarize_text, expand_chips, recognize_sign, compose_from_glosses, suggest_smart_chips,
+                         LLM_MODEL, LLM_BASE_URL)
 
 # Cấu hình encoding trên Windows
 if sys.platform == "win32":
@@ -60,6 +61,7 @@ MAX_REQUEST_BYTES = 6 * 1024 * 1024     # tương đương spring.servlet.multip
 MAX_TEXT = 300
 MAX_PERSONAL_CHIPS = 20
 MAX_USER_ID = 64
+MAX_DEVICE_GLOSSES = 10
 ALLOWED_FRAME_COUNTS = (4, 8, 12, 16)
 # Hợp đồng mục 4.4 chỉ yêu cầu m4a; thêm webm/wav/mp3/ogg cho Web Studio (tập cha, mobile không bị ảnh hưởng)
 AUDIO_TYPES = {
@@ -185,6 +187,14 @@ class SignResponse(BaseModel):
     confidence: float
     spoken_sentence: str
     suggestedChips: List[str]
+
+class SignGlossesRequest(BaseModel):
+    """Mục 4.2a: ký hiệu đã nhận diện offline trên mobile (model TFLite), đúng thứ tự ký."""
+    context: ContextType
+    glosses: List[ChipText] = Field(max_length=MAX_DEVICE_GLOSSES)
+    confidences: List[Annotated[float, Field(ge=0.0, le=1.0)]] = Field(max_length=MAX_DEVICE_GLOSSES)
+    personalChips: List[ChipText] = Field(default_factory=list, max_length=MAX_PERSONAL_CHIPS)
+    previousIncoming: Optional[ShortText] = None
 
 class CreateChipRequest(BaseModel):
     text: ChipText
@@ -396,6 +406,34 @@ async def process_sign_frames(
     )
     return SignResponse(**conversation.check_sign_output(context, result))
 
+
+@app.post("/api/v1/sign/glosses", response_model=SignResponse)
+@app.post("/api/sign/glosses", response_model=SignResponse)
+def process_device_glosses(req: SignGlossesRequest):
+    """
+    Luồng Hybrid (mục 4.2a): mobile nhận diện ký hiệu offline → server kiểm tra (mục 7.4) rồi ghép câu.
+    `def` (không async) để FastAPI chạy trong threadpool, lời gọi LLM không chặn event loop.
+    """
+    if len(req.confidences) != len(req.glosses):
+        raise ApiError.invalid_request("confidences phải có cùng số phần tử với glosses.")
+    checked = conversation.check_device_glosses(req.context, req.glosses, req.confidences)
+    sentence = ""
+    if not checked["needConfirm"]:
+        display = [conversation.display_gloss(g) for g in checked["glosses"]]
+        out = compose_from_glosses(
+            glosses=display,
+            context=req.context,
+            personal_chips=req.personalChips,
+            previous_incoming=check_length("previousIncoming", req.previousIncoming)
+        )
+        sentence = conversation.check_gloss_sentence(out, checked["glosses"])
+    return SignResponse(
+        glosses=checked["glosses"],
+        confidence=checked["confidence"],
+        spoken_sentence=sentence,
+        suggestedChips=checked["suggestedChips"],
+    )
+
 # ----------------- Quick Chips (CSDL) — mở rộng của bản Python, không có trong mục 4 -----------------
 
 def get_current_user_id(x_user_id: Optional[str] = None, user_id: Optional[str] = None) -> str:
@@ -490,6 +528,7 @@ def health_check():
         "whisper_model": MODEL_NAME,
         "llm_model": os.getenv("LLM_MODEL", LLM_MODEL),
         "llm_configured": api_key_configured,
+        "vsl_labels": len(conversation.vsl_labels()),
         "llm_base_url": os.getenv("LLM_BASE_URL", LLM_BASE_URL)
     }
 

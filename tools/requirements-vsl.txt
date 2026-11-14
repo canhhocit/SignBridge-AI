@@ -1,0 +1,4 @@
+# Chỉ cho tools/convert_vsl_tflite.py — cài vào venv RIÊNG (venv-vsl), không cài vào venv server.
+# Model gốc lưu bằng Keras 3.5.0 → cần TensorFlow kèm Keras >= 3.5.
+tensorflow==2.18.*
+numpy<2.1

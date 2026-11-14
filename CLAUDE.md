@@ -15,6 +15,7 @@
 | Chạy server (cổng 8000, nạp PhoWhisper lúc khởi động) | `./venv/Scripts/python.exe -m uvicorn app:app --host 0.0.0.0 --port 8000` |
 | Chạy server không nạp model (chỉ thử LLM/validate) | đặt `WHISPER_PRELOAD=0` |
 | Swagger UI / OpenAPI · Web Studio | `http://localhost:8000/docs` · `/openapi.json` · `/` |
+| Convert model VSL → TFLite + `data/vsl/labels.json` (venv riêng, `docs/guideline-vsl-hybrid.md`) | `./venv-vsl/Scripts/python.exe tools/convert_vsl_tflite.py --model … --labels … --out-dir data/vsl` |
 | Benchmark STT (không phải test) | `./venv/Scripts/python.exe test_transcribe.py test_audio-text/test.mp3 vi` |
 
 Không có lint/formatter/CI. **Cổng duy nhất là test** (`pytest.ini` chỉ gom `tests/`).
@@ -24,7 +25,7 @@ Không có lint/formatter/CI. **Cổng duy nhất là test** (`pytest.ini` chỉ
 | File | Trách nhiệm | KHÔNG được |
 |---|---|---|
 | `app.py` | Endpoint FastAPI + validate request (số frame, kích thước, media type, độ dài text, enum `context`); middleware log request; nạp lười PhoWhisper (`get_whisper_model`); Web Studio HTML | Chứa luật kiểm tra output AI; gọi `openai` trực tiếp |
-| `conversation.py` | Kiểm tra lại output AI (§4.6, §7.4): `check_sign_output`, `check_summarize_output`, `check_expand_output`; bộ ký hiệu `allowed_glosses`, `normalize_gloss` | Import FastAPI / đọc `UploadFile` |
+| `conversation.py` | Kiểm tra lại output AI (§4.6, §7.4): `check_sign_output`, `check_summarize_output`, `check_expand_output`, `check_device_glosses`/`check_gloss_sentence` (§4.2a); bộ ký hiệu `allowed_glosses` ∪ nhãn model `vsl_labels`, `normalize_gloss` | Import FastAPI / đọc `UploadFile` |
 | `llm_service.py` | Gọi LLM (OpenAI-compatible, `LLM_*`): prompt, guardrail số `verify_and_protect_numbers`, fallback heuristic `mock_summarize` | Trả output chưa qua `conversation.check_*` ra ngoài |
 | `errors.py` | `ApiError` + factory mã lỗi, handler chung `{"error":{"code","message"}}` | Phụ thuộc ngược vào `app`, `conversation`, `llm_service` |
 | `database.py` | SQLAlchemy: thẻ hệ thống + thẻ cá nhân (`/api/chips`); PostgreSQL, tự fallback SQLite | Lưu frame/audio/transcript |

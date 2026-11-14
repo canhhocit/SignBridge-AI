@@ -2,7 +2,8 @@ import os
 import re
 import json
 import logging
-from typing import List, Optional, Dict, Any
+import functools
+from typing import List, Optional, Dict, Any, Tuple
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -118,14 +119,20 @@ CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON HỢP LỆ:
 }
 """
 
+@functools.lru_cache(maxsize=2)
+def _openai_client(base_url: str, api_key: str):
+    from openai import OpenAI
+    # Dùng chung 1 client → giữ kết nối HTTPS (keep-alive), không bắt tay TLS lại mỗi request.
+    # max_retries=0: mục 4.6 không retry; SDK mặc định retry 2 lần → 1 request có thể mất 3× timeout.
+    # Timeout 3.5s để phản hồi cực nhanh, không để người dùng chờ lâu
+    return OpenAI(base_url=base_url, api_key=api_key, timeout=3.5, max_retries=0)
+
+
 def get_openai_client():
     api_key = os.getenv("LLM_API_KEY", LLM_API_KEY).strip()
     if not api_key:
         return None
-    from openai import OpenAI
-    base_url = os.getenv("LLM_BASE_URL", LLM_BASE_URL).strip()
-    # Timeout 3.5s để phản hồi cực nhanh, không để người dùng chờ lâu
-    return OpenAI(base_url=base_url, api_key=api_key, timeout=3.5)
+    return _openai_client(os.getenv("LLM_BASE_URL", LLM_BASE_URL).strip(), api_key)
 
 def clean_json_text(text: str) -> str:
     text = text.strip()
@@ -574,6 +581,69 @@ def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_
     except ValueError:
         logger.warning("AI sign: AI_UPSTREAM_ERROR sai định dạng")
         raise ApiError.ai_upstream_error("AI trả dữ liệu sai định dạng.")
+
+GLOSS_SENTENCE_SYSTEM_PROMPT = """Bạn viết câu nói cho người khiếm thính trong dự án SignBridge.
+Đầu vào là chuỗi ký hiệu (glosses) mà điện thoại đã nhận diện, đúng thứ tự người dùng ký.
+
+QUY TẮC BẮT BUỘC:
+1. "spoken_sentence" chỉ diễn đạt đúng nghĩa các glosses, giữ thứ tự ý. Tối đa 40 từ.
+2. Được thêm: lời chào, cảm ơn, kính ngữ (anh/chị/bạn/mình), từ nối, trợ từ (nhé, ạ, giúp mình), sắp lại trật tự cho đúng ngữ pháp.
+3. KHÔNG thêm triệu chứng, món, giấy tờ, số lượng, giá, thời gian, tên sản phẩm hay yêu cầu không có trong glosses.
+   Không đổi nghĩa, không làm mạnh/nhẹ ý người dùng.
+4. Dùng CÂU_NHÂN_VIÊN_VỪA_NÓI để câu trả lời đúng mạch. Dùng THẺ_CÁ_NHÂN chỉ khi liên quan trực tiếp đến glosses.
+5. Chỉ trả JSON: {"spoken_sentence": "..."}
+"""
+
+
+def _gloss_sentence_llm(client, glosses: Tuple[str, ...], context: str,
+                        personal_chips: Tuple[str, ...], previous_incoming: Optional[str]) -> Dict[str, Any]:
+    text = (f"GLOSSES: {json.dumps(list(glosses), ensure_ascii=False)}\n"
+            f"NGỮ_CẢNH: {context}\n"
+            f"CÂU_NHÂN_VIÊN_VỪA_NÓI: {previous_incoming or 'không có'}\n"
+            f"THẺ_CÁ_NHÂN: {json.dumps(list(personal_chips), ensure_ascii=False)}")
+    response = client.chat.completions.create(
+        model=os.getenv("LLM_MODEL", LLM_MODEL).strip(),
+        messages=[
+            {"role": "system", "content": GLOSS_SENTENCE_SYSTEM_PROMPT},
+            {"role": "user", "content": text}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.0,
+        max_tokens=100,
+        timeout=float(os.getenv("AI_TIMEOUT_GLOSSES", "4"))
+    )
+    return json.loads(clean_json_text(response.choices[0].message.content or "{}"))
+
+
+@functools.lru_cache(maxsize=256)
+def _gloss_sentence_first_turn(model: str, glosses: Tuple[str, ...], context: str) -> Dict[str, Any]:
+    """Cache trong RAM cho lượt không có ngữ cảnh hội thoại: cùng chuỗi ký hiệu → cùng câu (temperature 0).
+    Chỉ chứa glosses + câu sinh ra; lỗi LLM không được cache."""
+    return _gloss_sentence_llm(get_openai_client(), glosses, context, (), None)
+
+
+def compose_from_glosses(glosses: List[str], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None,
+                         previous_incoming: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Ghép ký hiệu đã nhận diện trên thiết bị thành câu nói (mục 4.2a, 7.3 bước 2).
+    Trả None khi chưa cấu hình LLM hoặc LLM lỗi → caller dùng câu dự phòng ghép từ chính glosses
+    (không bịa thêm ý, nên không cần chặn như /api/sign)."""
+    import openai
+
+    client = get_openai_client()
+    if not client:
+        return None
+    try:
+        if not personal_chips and not previous_incoming:
+            return _gloss_sentence_first_turn(os.getenv("LLM_MODEL", LLM_MODEL).strip(), tuple(glosses), context)
+        return _gloss_sentence_llm(client, tuple(glosses), context, tuple(personal_chips or ()), previous_incoming)
+    except openai.APITimeoutError:
+        logger.warning("AI glosses: AI_TIMEOUT, dùng câu dự phòng")
+    except openai.APIError as e:
+        logger.warning("AI glosses: AI_UPSTREAM_ERROR (%s), dùng câu dự phòng", type(e).__name__)
+    except ValueError:
+        logger.warning("AI glosses: AI_UPSTREAM_ERROR sai định dạng, dùng câu dự phòng")
+    return None
+
 
 def suggest_smart_chips(context: str = "CUSTOM", recent_text: Optional[str] = None, existing_chips: Optional[List[str]] = None) -> List[str]:
     """
