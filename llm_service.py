@@ -61,21 +61,35 @@ QUY TẮC BẮT BUỘC CHO "quickReplies" (CỰC KỲ QUAN TRỌNG):
   2. Câu 2: Hỏi chi tiết tiếp theo / Thắc mắc thực tế (Ví dụ: "Đi bộ có xa không ạ?", "Uống trước hay sau ăn ạ?", "Bao giờ thì có kết quả ạ?")
   3. Câu 3: Nhờ hỗ trợ thêm / Hỏi lại / Từ chối (Ví dụ: "Chỉ lại giúp em một chút ạ", "Có loại khác rẻ hơn không ạ?", "Em không mang CCCD rồi")
 
+6. KHÔI PHỤC NGỮ NGHĨA KHI NÓI NHỎ / NUỐT ÂM / MẤT TỪ (CỰC KỲ QUAN TRỌNG):
+- Do môi trường ồn ào hoặc người nói nói nhỏ/nuốt chữ, văn bản STT có thể bị mất từ, cụt chữ hoặc sai âm học (ví dụ: "...băm nhăm... quét mã kia", "cho ly... ít đường... năm mươi đá", "thẳng... rẽ... chợ kia").
+- BẠN BẮT BUỘC PHẢI DỰA VÀO:
+  + "Bối cảnh" (CAFE, PHARMACY, PUBLIC, CUSTOM).
+  + "Lời người khiếm thính nói lượt trước" (previousOutgoing) nếu có.
+  để khôi phục lại câu nói đầy đủ, chuẩn xác theo ngữ cảnh trước khi tóm tắt!
+  (Ví dụ: Người khiếm thính hỏi "Ly này bao nhiêu tiền ạ?", người bán nói nhỏ "...băm nhăm..." -> bạn khôi phục thành "35 nghìn", tóm tắt "35 nghìn • Chuyển khoản hoặc tiền mặt").
+- NẾU CÂU NÓI THỰC SỰ QUÁ NHỎ HOẶC ĐỨT ĐOẠN KHÔNG THỂ HIỂU ĐƯỢC Ý ĐỊNH:
+  + "summary": "Người nói nói hơi nhỏ • Chưa rõ ý"
+  + "iconCode": "WARNING"
+  + "highlights": [{"type": "OTHER", "text": "Chưa rõ ý"}]
+  + "quickReplies": ["Bác nói to hơn một chút giúp cháu nhé", "Cháu bị khiếm thính, bác nói lại giúp cháu ạ", "Bác viết ra giấy hoặc chỉ tay giúp cháu nhé"]
+  + "suggestedChips": ["Nói to hơn", "Nói lại", "Viết ra giấy", "Chỉ tay"]
+
 VÍ DỤ TÌNH HUỐNG THỰC TẾ:
 - Tình huống chỉ đường (Người A: "Cháu cứ đi thẳng ngã tư rẽ trái, nhìn bên phải là thấy chợ nhé"):
   "summary": "Đi thẳng ngã tư • Rẽ trái • Chợ bên phải",
   "iconCode": "INFO",
   "quickReplies": ["Dạ em cảm ơn ạ", "Đi bộ có xa không ạ?", "Chỉ lại giúp em một chút ạ"]
 
-- Tình huống tính tiền (Người A: "Của em hết 45 nghìn, thanh toán tiền mặt hay chuyển khoản?"):
-  "summary": "45 nghìn • Tiền mặt hoặc chuyển khoản",
+- Tình huống nói nhỏ/nuốt chữ nhưng khôi phục được nhờ câu hỏi trước (Người B: "Bao nhiêu tiền ạ?", Người A nói nhỏ: "...băm nhăm... quét mã"):
+  "summary": "35 nghìn • Quét mã thanh toán",
   "iconCode": "MONEY",
   "quickReplies": ["Em quét mã QR nhé", "Em gửi tiền mặt ạ", "Cho em xin hóa đơn ạ"]
 
-- Tình huống hiệu thuốc (Người A: "Thuốc này ngày uống 2 lần sau ăn sáng tối nhé"):
-  "summary": "Ngày uống 2 lần • Sau ăn sáng tối",
-  "iconCode": "PILL",
-  "quickReplies": ["Dạ em hiểu rồi, cảm ơn", "Uống trong mấy ngày ạ?", "Viết ra giấy giúp em với"]
+- Tình huống nói quá nhỏ/không nghe được:
+  "summary": "Người nói nói hơi nhỏ • Chưa rõ ý",
+  "iconCode": "WARNING",
+  "quickReplies": ["Bác nói to hơn một chút giúp cháu nhé", "Cháu bị khiếm thính, bác nói lại giúp cháu ạ", "Bác viết ra giấy hoặc chỉ tay giúp cháu nhé"]
 
 CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON HỢP LỆ VỚI CÁC TRƯỜNG:
 {
@@ -223,10 +237,13 @@ def verify_and_protect_numbers(transcript: str, data: Dict[str, Any]) -> Dict[st
         "PHARMACY": ["Dạ em hiểu rồi, cảm ơn ạ", "Uống trong mấy ngày ạ?", "Viết ra giấy giúp em với"],
         "CAFE": ["Cho em lấy ly này ạ", "Ít ngọt ít đá giúp em", "Cho em mang về nhé"],
         "PUBLIC": ["Dạ em có đủ giấy tờ rồi", "Nộp lệ phí ở đâu ạ?", "Bao giờ có kết quả ạ?"],
+        "WARNING": ["Bác nói to hơn một chút giúp cháu nhé", "Cháu bị khiếm thính, bác nói lại giúp cháu ạ", "Bác viết ra giấy hoặc chỉ tay giúp cháu nhé"],
         "DEFAULT": ["Dạ em cảm ơn ạ", "Cho em hỏi thêm một chút", "Chờ em một lát nhé"]
     }
 
-    if is_direction_context:
+    if icon == "WARNING":
+        pool = context_fallbacks["WARNING"]
+    elif is_direction_context:
         pool = context_fallbacks["DIRECTIONS"]
     elif icon in ["MONEY", "QR_PAYMENT"]:
         pool = context_fallbacks["PRICE"]
@@ -250,7 +267,9 @@ def verify_and_protect_numbers(transcript: str, data: Dict[str, Any]) -> Dict[st
     # 7. Đảm bảo suggestedChips hợp lệ
     s_chips = data.get("suggestedChips", [])
     if not isinstance(s_chips, list) or not s_chips:
-        if is_direction_context:
+        if icon == "WARNING":
+            s_chips = ["Nói to hơn", "Nói lại", "Viết ra giấy", "Chỉ tay"]
+        elif is_direction_context:
             s_chips = ["Đi bộ", "Bao xa", "Gần đây", "Đi xe máy"]
         elif icon in ["MONEY", "QR_PAYMENT"]:
             s_chips = ["Chuyển khoản QR", "Tiền mặt", "Hóa đơn", "Có giảm giá không"]
@@ -337,6 +356,19 @@ def mock_summarize(transcript: str, context: str) -> Dict[str, Any]:
         r'\b(dạ|vâng|ạ|nhé|xin chào|chào anh|chào chị|cảm ơn|của anh|của chị|giúp em|với ạ|phiền anh|phiền chị)\b',
         '', transcript, flags=re.IGNORECASE
     ).strip()
+
+    if not clean_text or len(clean_text) < 3:
+        return {
+            "summary": "Người nói nói hơi nhỏ • Chưa rõ ý",
+            "highlights": [{"type": "OTHER", "text": "Chưa rõ ý"}],
+            "iconCode": "WARNING",
+            "quickReplies": [
+                "Bác nói to hơn một chút giúp cháu nhé",
+                "Cháu bị khiếm thính, bác nói lại giúp cháu ạ",
+                "Bác viết ra giấy hoặc chỉ tay giúp cháu nhé"
+            ],
+            "suggestedChips": ["Nói to hơn", "Nói lại", "Viết ra giấy", "Chỉ tay"]
+        }
 
     highlights = []
     bullet_items = []

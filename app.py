@@ -126,7 +126,8 @@ class SuggestChipsRequest(BaseModel):
 def run_transcribe(audio_source: Any, language: str = "vi", context: str = "CUSTOM") -> tuple[str, float, str, float]:
     """
     Nhận diện âm thanh siêu tốc trực tiếp từ bộ nhớ RAM (In-Memory Buffer)
-    Sử dụng greedy search (beam_size=1) + temperature=0.0 + initial_prompt theo ngữ cảnh
+    Sử dụng greedy search (beam_size=1) + temperature=0.0 + initial_prompt theo ngữ cảnh.
+    Tối ưu VAD (threshold=0.3, speech_pad_ms=250) để bắt trọn cả tiếng nói nhỏ, nói thầm, tránh bị nuốt từ.
     """
     initial_prompt = CONTEXT_PROMPTS.get(context, CONTEXT_PROMPTS["CUSTOM"])
     segments, info = whisper_model.transcribe(
@@ -136,6 +137,11 @@ def run_transcribe(audio_source: Any, language: str = "vi", context: str = "CUST
         temperature=0.0,                     # Tuyệt đối ổn định & nhanh nhất
         condition_on_previous_text=False,    # Tắt suy đoán chuỗi trước để tránh lặp câu và giảm tính toán
         vad_filter=True,                     # Lọc bỏ khoảng lặng
+        vad_parameters=dict(
+            threshold=0.3,                   # Hạ ngưỡng từ 0.5 xuống 0.3 để bắt cả giọng nói nhỏ, thì thầm
+            min_speech_duration_ms=120,      # Nhận diện cả các từ ngắn, nuốt âm
+            speech_pad_ms=250                # Đệm 250ms hai đầu để tránh cụt âm tiết đầu/cuối
+        ),
         initial_prompt=initial_prompt        # Mồi từ khóa theo ngữ cảnh để nhận diện chính xác số và tên món
     )
     text_parts = [s.text for s in segments]
@@ -703,7 +709,14 @@ function switchAudioMode(mode) {
 async function toggleRecord() {
     if (!isRecording) {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            // Tối ưu hóa Micro: Tự động khuếch đại (AGC) khi nói nhỏ + Lọc tiếng ồn môi trường
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    autoGainControl: true,  // Tự động tăng độ nhạy micro khi nói nhỏ/ở xa
+                    noiseSuppression: true, // Khử tiếng ồn nền (xe cộ, quạt gió)
+                    echoCancellation: true  // Chống dội âm
+                }
+            });
             mediaRecorder = new MediaRecorder(stream);
             audioChunks = [];
             mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
