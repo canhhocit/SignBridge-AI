@@ -34,6 +34,13 @@ def test_health(client):
     assert res.json()["status"] == "UP"
 
 
+def test_index_page_returns_html(client):
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "SignBridge AI Studio" in res.text
+    assert "text/html" in res.headers.get("content-type", "")
+
+
 def test_unknown_path_is_not_server_error(client):
     assert_error(client.get("/khong-co"), 404, "NOT_FOUND")
     assert_error(client.get("/favicon.ico"), 404, "NOT_FOUND")
