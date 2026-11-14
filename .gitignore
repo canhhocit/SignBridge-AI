@@ -10,6 +10,7 @@ env/
 
 # Python cache
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 
@@ -34,3 +35,9 @@ Vietnamese-Sign-Language-Recognition/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Model VSL convert cho luồng Hybrid (62MB gốc, license repo nguồn chưa rõ) — tải/convert theo docs/guideline-vsl-hybrid.md
+data/vsl/
+venv-vsl/
+*.tflite
+*.keras

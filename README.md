@@ -24,8 +24,10 @@ SignBridge-AI/
 ├── app.py                     # Ứng dụng FastAPI & Web Test Studio
 ├── test_transcribe.py         # Script CLI đo độ trễ & benchmark phiên âm
 ├── requirements.txt           # Danh sách thư viện Python
+├── tools/                     # convert_vsl_tflite.py + requirements-vsl.txt (venv riêng)
 ├── docs/                      # Tài liệu thiết kế & phân công
 │   ├── luong-xu-ly-chinh.md   # Thiết kế luồng xử lý chi tiết (Mermaid sequence)
+│   ├── guideline-vsl-hybrid.md # Tải/convert model VSL offline cho mobile (luồng Hybrid)
 │   └── phan-cong.md           # Phân công công việc nhóm
 ├── data/                      # Lưu trữ weights model CTranslate2 (git ignored)
 │   └── sample_vi.wav          # Audio mẫu ngắn tiếng Việt
@@ -111,6 +113,31 @@ Sau khi server chạy:
 ---
 
 
+### 3. Endpoint cho mobile (hợp đồng `docs/luong-xu-ly-chinh.md` §4)
+
+| Method | Path | Body |
+|---|---|---|
+| GET | `/api/health` | — |
+| POST | `/api/sign` | multipart: `context`, `frames` (4/8/12/16 file JPEG ≤ 250KB), `personalChips` (JSON array ≤ 20), `previousIncoming` (≤ 300 ký tự) |
+| POST | `/api/sign/glosses` (alias `/api/v1/sign/glosses`) | JSON: `{context, glosses[0..10], confidences[], personalChips, previousIncoming}` — luồng Hybrid, mobile nhận diện offline (§4.2a) |
+| POST | `/api/expand` | JSON: `{context, chips[1..5] (≤ 50 ký tự), previousIncoming}` |
+| POST | `/api/summarize` | multipart: `context`, `audio` (m4a ≤ 2MB; Web Studio thêm webm/wav/mp3/ogg), `previousOutgoing` |
+| GET/POST/DELETE | `/api/chips` (alias `/api/v1/chips`), `POST /api/chips/reset` | Thẻ hệ thống + thẻ cá nhân, người dùng xác định bằng header `X-User-Id` (hoặc `user_id`) — mở rộng, không có trong §4 |
+| POST | `/api/ai/suggest-chips` (alias `/api/v1/ai/suggest-chips`) | JSON: `{context, recentText, existingChips}` — mở rộng |
+
+Mọi lỗi trả `{"error": {"code", "message"}}` với mã theo bảng §4.0 (`INVALID_REQUEST`, `PAYLOAD_TOO_LARGE`,
+`UNSUPPORTED_MEDIA_TYPE`, `NO_SIGN_DETECTED`, `NO_SPEECH_DETECTED`, `AI_UPSTREAM_ERROR`, `AI_TIMEOUT`).
+Chưa đặt `LLM_API_KEY` → chế độ mock (gửi `personalChips=["MOCK_LOW"]` lên `/api/sign` để thử luồng confidence thấp).
+
+### 4. Chạy test
+
+```powershell
+.env\Scripts\python.exe -m pip install -r requirements-dev.txt
+.env\Scripts\python.exe -m pytest -q
+```
+
+---
+
 ## 6. Cấu hình Mô hình
 
 Mặc định server sử dụng mô hình tối ưu tiếng Việt **PhoWhisper**:
@@ -120,6 +147,12 @@ Mặc định server sử dụng mô hình tối ưu tiếng Việt **PhoWhisper
   ```powershell
   $env:WHISPER_MODEL="diepho/PhoWhisper-base-ct2"
   ```
+
+---
+
+## 6b. Model ký hiệu offline (luồng Hybrid)
+
+Mobile nhận diện ký hiệu bằng TFLite trên máy rồi gửi nhãn lên `/api/sign/glosses`. Server chỉ cần `data/vsl/labels.json` (đường dẫn đổi bằng `VSL_LABELS_PATH`); không có file thì chỉ chấp nhận bộ ký hiệu §7. Cách tải model gốc, convert sang `.tflite` và yêu cầu tiền xử lý phía mobile: **[docs/guideline-vsl-hybrid.md](docs/guideline-vsl-hybrid.md)**.
 
 ---
 

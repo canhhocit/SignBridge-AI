@@ -2,7 +2,8 @@ import os
 import re
 import json
 import logging
-from typing import List, Optional, Dict, Any
+import functools
+from typing import List, Optional, Dict, Any, Tuple
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
@@ -118,14 +119,20 @@ CHỈ TRẢ VỀ DUY NHẤT 1 ĐỐI TƯỢNG JSON HỢP LỆ:
 }
 """
 
+@functools.lru_cache(maxsize=2)
+def _openai_client(base_url: str, api_key: str):
+    from openai import OpenAI
+    # Dùng chung 1 client → giữ kết nối HTTPS (keep-alive), không bắt tay TLS lại mỗi request.
+    # max_retries=0: mục 4.6 không retry; SDK mặc định retry 2 lần → 1 request có thể mất 3× timeout.
+    # Timeout 3.5s để phản hồi cực nhanh, không để người dùng chờ lâu
+    return OpenAI(base_url=base_url, api_key=api_key, timeout=3.5, max_retries=0)
+
+
 def get_openai_client():
     api_key = os.getenv("LLM_API_KEY", LLM_API_KEY).strip()
     if not api_key:
         return None
-    from openai import OpenAI
-    base_url = os.getenv("LLM_BASE_URL", LLM_BASE_URL).strip()
-    # Timeout 3.5s để phản hồi cực nhanh, không để người dùng chờ lâu
-    return OpenAI(base_url=base_url, api_key=api_key, timeout=3.5)
+    return _openai_client(os.getenv("LLM_BASE_URL", LLM_BASE_URL).strip(), api_key)
 
 def clean_json_text(text: str) -> str:
     text = text.strip()
@@ -182,24 +189,33 @@ def verify_and_protect_numbers(transcript: str, data: Dict[str, Any]) -> Dict[st
                 summary = val
             summary_lower = summary.lower()
 
-    # 3. Lọc highlights: chỉ giữ phần tử có trong summary
+    # 3. Lọc highlights: chỉ giữ phần tử có trong summary.
+    # So khớp không phân biệt hoa/thường nhưng trả đúng đoạn nguyên văn của summary (mục 4.4)
+    def exact_in_summary(text: str) -> Optional[str]:
+        idx = summary.lower().find(text.lower())
+        if idx < 0:
+            return None
+        exact = summary[idx:idx + len(text)]
+        return exact if exact.lower() == text.lower() else None
+
     clean_highlights = []
     seen_texts = set()
     for h in highlights:
         if isinstance(h, dict):
-            htext = str(h.get("text", "")).strip()
+            htext = exact_in_summary(str(h.get("text", "")).strip()) if str(h.get("text", "")).strip() else None
             htype = str(h.get("type", "OTHER")).upper()
             if htype not in VALID_HIGHLIGHT_TYPES:
                 htype = "OTHER"
-            if htext and htext.lower() in summary.lower() and htext.lower() not in seen_texts:
+            if htext and htext.lower() not in seen_texts:
                 clean_highlights.append({"type": htype, "text": htext})
                 seen_texts.add(htext.lower())
 
     # 4. Tự động thêm các số quan trọng vào highlights nếu LLM bỏ quên
     for val, ptype in needed_entities:
-        if val.lower() in summary.lower() and val.lower() not in seen_texts:
-            clean_highlights.append({"type": ptype, "text": val})
-            seen_texts.add(val.lower())
+        exact = exact_in_summary(val)
+        if exact and exact.lower() not in seen_texts:
+            clean_highlights.append({"type": ptype, "text": exact})
+            seen_texts.add(exact.lower())
 
     data["summary"] = summary
     data["highlights"] = clean_highlights
@@ -462,11 +478,32 @@ def mock_summarize(transcript: str, context: str) -> Dict[str, Any]:
     }
     return verify_and_protect_numbers(transcript, raw_data)
 
-def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None, previous_incoming: Optional[str] = None) -> Dict[str, Any]:
+SIGN_SYSTEM_PROMPT = """Bạn là bộ nhận diện ngôn ngữ ký hiệu cho người khiếm thính.
+Đầu vào là chuỗi khung hình liên tiếp, 4 khung hình mỗi 1,5 giây.
+
+QUY TẮC BẮT BUỘC:
+1. Chỉ được trả "glosses" là chuỗi GIỐNG HỆT một mục trong DANH_SÁCH_KÝ_HIỆU, hoặc "UNKNOWN".
+   Không dùng từ đồng nghĩa, không đổi chữ, không thêm từ ngoài danh sách.
+2. Không chắc một ký hiệu → "UNKNOWN". Không đoán.
+3. Nếu có bất kỳ "UNKNOWN" → "spoken_sentence" = "" và "confidence" < 0.7.
+4. "spoken_sentence" chỉ diễn đạt đúng nghĩa các glosses. Được thêm lời chào, kính ngữ, từ nối.
+   KHÔNG thêm triệu chứng, món, số lượng, giá, thời gian, tên sản phẩm hay yêu cầu không có trong glosses.
+5. Chỉ trả JSON đúng schema, không giải thích:
+{"glosses": ["..."], "confidence": 0.0, "spoken_sentence": "...", "suggestedChips": ["...", "...", "..."]}
+"""
+
+
+def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None,
+                   previous_incoming: Optional[str] = None, allowed_glosses: Optional[List[str]] = None) -> Dict[str, Any]:
     """
-    Nhận diện ngôn ngữ ký hiệu từ chuỗi frame ảnh JPEG (mục 4.2, 7.1).
-    Có Fallback bộ từ vựng chuẩn ngữ cảnh để bảo đảm phản hồi tức thì và không lỗi khi demo.
+    Nhận diện ngôn ngữ ký hiệu từ chuỗi frame ảnh JPEG (mục 4.2, 7.3).
+    Chưa cấu hình LLM_API_KEY → trả dữ liệu mẫu theo ngữ cảnh (chế độ mock, như MockAiGateway).
+    Đã cấu hình mà gọi lỗi → ném ApiError (502/504) để mobile chuyển sang thẻ từ khóa;
+    KHÔNG trả câu mẫu vì mobile sẽ phát loa một câu người dùng không hề ký hiệu.
     """
+    from errors import ApiError
+    import openai
+
     context_fallbacks = {
         "PHARMACY": {
             "glosses": ["ĐAU", "ĐẦU", "MUA", "THUỐC"],
@@ -503,50 +540,110 @@ def recognize_sign(frames_bytes: List[bytes], context: str = "CUSTOM", personal_
         }
 
     client = get_openai_client()
-    if not client or not frames_bytes:
+    if not client:
         return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
 
+    import base64
+    # Chọn frame đầu và frame giữa để gửi vision (giảm độ trễ)
+    indices = [0]
+    if len(frames_bytes) > 2:
+        indices.append(len(frames_bytes) // 2)
+
+    text = (f"DANH_SÁCH_KÝ_HIỆU: {json.dumps(allowed_glosses or [], ensure_ascii=False)}\n"
+            f"NGỮ_CẢNH: {context}\n"
+            f"CÂU_NHÂN_VIÊN_VỪA_NÓI: {previous_incoming or 'không có'}\n"
+            f"THẺ_CÁ_NHÂN: {json.dumps(personal_chips or [], ensure_ascii=False)}")
+    content_parts = [{"type": "text", "text": text}]
+    for idx in indices:
+        b64 = base64.b64encode(frames_bytes[idx]).decode("utf-8")
+        content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
 
     try:
-        import base64
-        # Chọn frame đầu và frame giữa để gửi vision
-        b64_list = []
-        indices = [0]
-        if len(frames_bytes) > 2:
-            indices.append(len(frames_bytes) // 2)
-        for idx in indices:
-            b64_list.append(base64.b64encode(frames_bytes[idx]).decode('utf-8'))
-
-        content_parts = [
-            {"type": "text", "text": f"Ngữ cảnh: {context}. Bộ ký hiệu cho phép: {context}. Nhận diện cử chỉ tay trong ảnh và trả về JSON: glosses (array chữ hoa), confidence (0.0-1.0), spoken_sentence (câu lịch sự tiếng Việt), suggestedChips (array 3 từ)."}
-        ]
-        for b64 in b64_list:
-            content_parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
-
         response = client.chat.completions.create(
             model=os.getenv("LLM_MODEL", LLM_MODEL).strip(),
             messages=[
-                {"role": "system", "content": "Bạn là bộ nhận diện ngôn ngữ ký hiệu VSL cho người khiếm thính. Trả về đúng JSON theo schema."},
+                {"role": "system", "content": SIGN_SYSTEM_PROMPT},
                 {"role": "user", "content": content_parts}
             ],
             response_format={"type": "json_object"},
             temperature=0.0,
             max_tokens=150,
-            timeout=3.0
+            timeout=float(os.getenv("AI_TIMEOUT_SIGN", "6"))
         )
         content = clean_json_text(response.choices[0].message.content or "{}")
-        data = json.loads(content)
-        if data.get("glosses") and data.get("spoken_sentence"):
-            return {
-                "glosses": data.get("glosses", []),
-                "confidence": float(data.get("confidence", 0.85)),
-                "spoken_sentence": str(data.get("spoken_sentence", "")),
-                "suggestedChips": data.get("suggestedChips", ["Đồng ý", "Cảm ơn", "Hỏi lại"])
-            }
-    except Exception as e:
-        logger.warning(f"Vision fallback do: {e}")
+        return json.loads(content)
+    except openai.APITimeoutError:
+        logger.warning("AI sign: AI_TIMEOUT")
+        raise ApiError.ai_timeout()
+    except openai.APIError as e:
+        logger.warning("AI sign: AI_UPSTREAM_ERROR (%s)", type(e).__name__)
+        raise ApiError.ai_upstream_error("Dịch vụ AI trả lỗi.")
+    except ValueError:
+        logger.warning("AI sign: AI_UPSTREAM_ERROR sai định dạng")
+        raise ApiError.ai_upstream_error("AI trả dữ liệu sai định dạng.")
 
-    return context_fallbacks.get(context, context_fallbacks["CUSTOM"])
+GLOSS_SENTENCE_SYSTEM_PROMPT = """Bạn viết câu nói cho người khiếm thính trong dự án SignBridge.
+Đầu vào là chuỗi ký hiệu (glosses) mà điện thoại đã nhận diện, đúng thứ tự người dùng ký.
+
+QUY TẮC BẮT BUỘC:
+1. "spoken_sentence" chỉ diễn đạt đúng nghĩa các glosses, giữ thứ tự ý. Tối đa 40 từ.
+2. Được thêm: lời chào, cảm ơn, kính ngữ (anh/chị/bạn/mình), từ nối, trợ từ (nhé, ạ, giúp mình), sắp lại trật tự cho đúng ngữ pháp.
+3. KHÔNG thêm triệu chứng, món, giấy tờ, số lượng, giá, thời gian, tên sản phẩm hay yêu cầu không có trong glosses.
+   Không đổi nghĩa, không làm mạnh/nhẹ ý người dùng.
+4. Dùng CÂU_NHÂN_VIÊN_VỪA_NÓI để câu trả lời đúng mạch. Dùng THẺ_CÁ_NHÂN chỉ khi liên quan trực tiếp đến glosses.
+5. Chỉ trả JSON: {"spoken_sentence": "..."}
+"""
+
+
+def _gloss_sentence_llm(client, glosses: Tuple[str, ...], context: str,
+                        personal_chips: Tuple[str, ...], previous_incoming: Optional[str]) -> Dict[str, Any]:
+    text = (f"GLOSSES: {json.dumps(list(glosses), ensure_ascii=False)}\n"
+            f"NGỮ_CẢNH: {context}\n"
+            f"CÂU_NHÂN_VIÊN_VỪA_NÓI: {previous_incoming or 'không có'}\n"
+            f"THẺ_CÁ_NHÂN: {json.dumps(list(personal_chips), ensure_ascii=False)}")
+    response = client.chat.completions.create(
+        model=os.getenv("LLM_MODEL", LLM_MODEL).strip(),
+        messages=[
+            {"role": "system", "content": GLOSS_SENTENCE_SYSTEM_PROMPT},
+            {"role": "user", "content": text}
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.0,
+        max_tokens=100,
+        timeout=float(os.getenv("AI_TIMEOUT_GLOSSES", "4"))
+    )
+    return json.loads(clean_json_text(response.choices[0].message.content or "{}"))
+
+
+@functools.lru_cache(maxsize=256)
+def _gloss_sentence_first_turn(model: str, glosses: Tuple[str, ...], context: str) -> Dict[str, Any]:
+    """Cache trong RAM cho lượt không có ngữ cảnh hội thoại: cùng chuỗi ký hiệu → cùng câu (temperature 0).
+    Chỉ chứa glosses + câu sinh ra; lỗi LLM không được cache."""
+    return _gloss_sentence_llm(get_openai_client(), glosses, context, (), None)
+
+
+def compose_from_glosses(glosses: List[str], context: str = "CUSTOM", personal_chips: Optional[List[str]] = None,
+                         previous_incoming: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Ghép ký hiệu đã nhận diện trên thiết bị thành câu nói (mục 4.2a, 7.3 bước 2).
+    Trả None khi chưa cấu hình LLM hoặc LLM lỗi → caller dùng câu dự phòng ghép từ chính glosses
+    (không bịa thêm ý, nên không cần chặn như /api/sign)."""
+    import openai
+
+    client = get_openai_client()
+    if not client:
+        return None
+    try:
+        if not personal_chips and not previous_incoming:
+            return _gloss_sentence_first_turn(os.getenv("LLM_MODEL", LLM_MODEL).strip(), tuple(glosses), context)
+        return _gloss_sentence_llm(client, tuple(glosses), context, tuple(personal_chips or ()), previous_incoming)
+    except openai.APITimeoutError:
+        logger.warning("AI glosses: AI_TIMEOUT, dùng câu dự phòng")
+    except openai.APIError as e:
+        logger.warning("AI glosses: AI_UPSTREAM_ERROR (%s), dùng câu dự phòng", type(e).__name__)
+    except ValueError:
+        logger.warning("AI glosses: AI_UPSTREAM_ERROR sai định dạng, dùng câu dự phòng")
+    return None
+
 
 def suggest_smart_chips(context: str = "CUSTOM", recent_text: Optional[str] = None, existing_chips: Optional[List[str]] = None) -> List[str]:
     """

@@ -18,7 +18,11 @@ if DATABASE_URL.startswith("postgresql://"):
 
 # Tạo engine kết nối với cơ chế tự động fallback sang SQLite nếu PostgreSQL chưa sẵn sàng
 try:
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
+    if DATABASE_URL.startswith("sqlite"):
+        # FastAPI chạy endpoint sync trên threadpool → SQLite cần tắt check_same_thread
+        engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    else:
+        engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
     # Test kết nối
     with engine.connect() as conn:
         logger.info("[+] Đã kết nối thành công tới PostgreSQL Database!")
@@ -207,6 +211,43 @@ def add_user_chip(user_id: str, text: str, context: str = "CUSTOM") -> Dict[str,
             "is_system": new_chip.is_system,
             "user_id": new_chip.user_id,
             "usage_count": new_chip.usage_count
+        }
+    finally:
+        db.close()
+
+def update_user_chip(user_id: str, chip_id: str, text: Optional[str] = None, context: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Cập nhật nội dung hoặc ngữ cảnh của thẻ cá nhân.
+    CHỈ CHO PHÉP SỬA thẻ của chính user_id đó. Tuyệt đối KHÔNG sửa thẻ hệ thống (is_system=True).
+    """
+    db = SessionLocal()
+    try:
+        chip = db.query(QuickChip).filter(
+            QuickChip.id == chip_id,
+            QuickChip.user_id == user_id,
+            QuickChip.is_system == False
+        ).first()
+        if not chip:
+            return None
+
+        if text is not None:
+            clean_text = text.strip()
+            if not clean_text:
+                raise ValueError("Nội dung thẻ không được để trống")
+            chip.text = clean_text
+
+        if context is not None:
+            chip.context = context
+
+        db.commit()
+        db.refresh(chip)
+        return {
+            "id": chip.id,
+            "text": chip.text,
+            "context": chip.context,
+            "is_system": chip.is_system,
+            "user_id": chip.user_id,
+            "usage_count": chip.usage_count
         }
     finally:
         db.close()
